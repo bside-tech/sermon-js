@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveTree, type ServiceDefinition } from "../src/config";
-import { generic } from "../src/presets/generic";
+import { generic } from "../src/presets";
 import { runService } from "../src/runner";
 import { collectSecretValues } from "../src/sanitize";
 import { mockFetch, type MockRoute } from "../src/testing";

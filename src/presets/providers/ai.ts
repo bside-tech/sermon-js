@@ -1,5 +1,5 @@
-import { definePreset, type PresetOptions } from "../config";
-import type { CheckOutcome } from "../types";
+import { definePreset, type PresetOptions } from "../../config";
+import type { CheckOutcome } from "../../types";
 import { bearer, call, round } from "./shared";
 
 type ApiKey = { secrets: { apiKey: string | undefined } };

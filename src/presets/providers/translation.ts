@@ -1,6 +1,6 @@
-import { definePreset, type PresetOptions } from "../config";
-import { googleServiceAccountToken, parseServiceAccount } from "../google-auth";
-import type { CheckOutcome } from "../types";
+import { definePreset, type PresetOptions } from "../../config";
+import { googleServiceAccountToken, parseServiceAccount } from "../../google-auth";
+import type { CheckOutcome } from "../../types";
 import { bearer, call, quota } from "./shared";
 
 export type DeepLOptions = PresetOptions & {

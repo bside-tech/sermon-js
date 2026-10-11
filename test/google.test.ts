@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { clearGoogleTokens, gcp, googleServiceAccountToken, parseServiceAccount, signGoogleAssertion } from "../src/gcp";
+import {
+  clearGoogleTokens,
+  gcp,
+  googleServiceAccountToken,
+  googleTranslate,
+  parseServiceAccount,
+  signGoogleAssertion,
+} from "../src/presets";
 import { createHttp } from "../src/probe";
-import { googleTranslate } from "../src/providers";
 import { mockFetch, runCheck, type MockRoute } from "../src/testing";
 import { decodeJwt, makeServiceAccount } from "./helpers/google-key";
 

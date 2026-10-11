@@ -1,5 +1,5 @@
-import { definePreset, type PresetOptions } from "../config";
-import type { CheckOutcome, Metrics, Usage } from "../types";
+import { definePreset, type PresetOptions } from "../../config";
+import type { CheckOutcome, Metrics, Usage } from "../../types";
 
 export type PusherOptions = PresetOptions & {
   appId: string | undefined;

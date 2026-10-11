@@ -1,5 +1,5 @@
-import { normalizeReturn } from "../probe";
-import type { CheckOutcome, CheckReturn, HttpInit, HttpResult, ProbeHelpers } from "../types";
+import { normalizeReturn } from "../../probe";
+import type { CheckOutcome, CheckReturn, HttpInit, HttpResult, ProbeHelpers } from "../../types";
 
 export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 

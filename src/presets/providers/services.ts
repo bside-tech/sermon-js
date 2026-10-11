@@ -1,5 +1,5 @@
-import { definePreset, type PresetOptions } from "../config";
-import type { CheckOutcome } from "../types";
+import { definePreset, type PresetOptions } from "../../config";
+import type { CheckOutcome } from "../../types";
 import { bearer, call, quota } from "./shared";
 
 export type MailerSendOptions = PresetOptions & {

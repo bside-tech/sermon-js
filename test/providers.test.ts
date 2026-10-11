@@ -18,7 +18,7 @@ import {
   speechmatics,
   statuspage,
   upstashRedis,
-} from "../src/providers";
+} from "../src/presets";
 import { mockFetch, runCheck, type MockRoute } from "../src/testing";
 import type { ServiceDefinition } from "../src";
 

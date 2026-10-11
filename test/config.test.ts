@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { custom, definePreset, group, resolveTree, type PresetOptions } from "../src/config";
-import { generic } from "../src/presets/generic";
+import { generic } from "../src/presets";
 
 type FlyOptions = PresetOptions & {
   app: string;

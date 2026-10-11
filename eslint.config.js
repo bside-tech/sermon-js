@@ -15,7 +15,7 @@ export default tseslint.config(
     },
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
-      // No Node built-ins in the edge-safe core (Node-only code lives in src/node)
+      // No Node built-ins anywhere in the library: it must run on edge runtimes too
       "no-restricted-imports": ["error", { patterns: ["node:*"] }],
       "no-restricted-globals": ["error", "process", "Buffer", "__dirname", "require"],
     },
@@ -26,7 +26,7 @@ export default tseslint.config(
     rules: { ...reactHooks.configs.recommended.rules },
   },
   {
-    files: ["*.config.ts", "test/**/*.{ts,tsx}", "src/node/**/*.ts", "examples/**/*.{ts,tsx}"],
+    files: ["*.config.ts", "test/**/*.{ts,tsx}", "examples/**/*.{ts,tsx}"],
     languageOptions: { globals: { ...globals.node } },
     rules: { "no-restricted-imports": "off", "no-restricted-globals": "off" },
   }

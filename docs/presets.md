@@ -2,7 +2,17 @@
 
 A preset is a typed function that turns a few options into a service. Every preset takes the
 same five concerns: `name`, its own fields, `secrets`, `track`, `critical` (plus `description`,
-`slowMs`, `timeoutMs`). Import only what you use; the rest is never bundled.
+`slowMs`, `timeoutMs`).
+
+They all come from one place:
+
+```ts
+import { aws, deepgram, fly, gcp, generic, mongodb, openai, statuspage } from "sermon-js/presets";
+```
+
+Presets only use `fetch` and Web Crypto, and the database presets take a client you provide,
+so this entry needs nothing extra installed and works on any runtime. Bundlers drop the
+presets you don't use.
 
 A service with an empty required secret or field is listed as **not configured** and never
 runs, so you can pass environment variables straight in.
@@ -10,14 +20,14 @@ runs, so you can pass environment variables straight in.
 Rules applied to every preset: latency above `slowMs` turns up into degraded, HTTP 429 is
 degraded, timeouts and network errors are down.
 
-## Core: `sermon-js`
+## Generic
 
 | Preset | Calls | up | degraded | down | Reports |
 |---|---|---|---|---|---|
 | `generic.http({ name, url, method?, headers?, body?, secrets?, track? })` | The URL | 2xx/3xx, or a status in `track.status` | 429, slow, or `track.json` says so | Other status, network error, timeout | Whatever `track.json` returns |
-| `custom({ name, check, secrets? })` | Your function | `true`, nothing, or `up` | `degraded`, or slow | `false`, `down`, or a throw | Whatever you return |
+| `custom({ name, check, secrets? })` (from `"sermon-js"`) | Your function | `true`, nothing, or `up` | `degraded`, or slow | `false`, `down`, or a throw | Whatever you return |
 
-## Fly.io: `sermon-js/fly`
+## Fly.io
 
 ```ts
 fly.app({ app: "my-api", secrets: { token }, track: { health: "/health" }, critical: true })
@@ -41,7 +51,7 @@ region's history survives deploys.
 `track.health`: a path (default `"/"`), `false` for states only, or
 `{ path, anyStatus: true }` to accept any HTTP answer. `track.machines: false` hides the rows.
 
-## Google Cloud: `sermon-js/gcp`
+## Google Cloud
 
 ```ts
 gcp.instance({ instance: "encoder-eu", zone: "europe-west1-b", secrets: { serviceAccount }, track: { health: "http://host:8080/" } })
@@ -60,14 +70,14 @@ Authentication uses Web Crypto, with no Google library.
 
 Reports `metrics.vm` and `metrics.zone`.
 
-## AWS and S3-compatible storage: `sermon-js/aws`
+## AWS and S3-compatible storage
 
 | Preset | Calls | Notes |
 |---|---|---|
 | `aws.credentials({ name, secrets: { accessKeyId, secretAccessKey } })` | STS `GetCallerIdentity` | Proves the credentials work, not that a given AWS service is healthy. For services with no cheap probe. |
 | `aws.s3Bucket({ bucket, endpoint?, region?, secrets })` | `HeadBucket` | Works with AWS S3, Tigris, Cloudflare R2, MinIO. down when missing or denied. |
 
-## Providers: `sermon-js/providers`
+## Providers
 
 One cheap, read-only call each unless noted. All take `secrets` and are up when the key works,
 down when it is rejected.
@@ -102,12 +112,26 @@ today); the daily peak (UTC) is kept in the store's cache. degraded when today's
 `warnAbovePct` (90) of the limit, or when subscription counting is off. Message counts aren't
 available from Pusher.
 
-## Node only: `sermon-js/node`
+## Databases
 
-| Preset | Needs | Calls |
+These take a client you created, so the library never imports a database driver.
+
+| Preset | Calls | Notes |
 |---|---|---|
-| `mongodb.ping({ secrets: { url } })` | the `mongodb` package | `ping`; reports `metrics.connectMs` |
-| `redis.ping({ client })` | a connected ioredis or node-redis client | `PING` |
+| `mongodb.ping({ client })` | `ping` command | `client` is your `MongoClient` or a `Db`. Pass `secrets: { url }` as well if you want the connection string redacted from errors. |
+| `redis.ping({ client })` | `PING` | A connected ioredis or node-redis client. For Upstash or Vercel KV over REST, use `upstashRedis`, which needs no client. |
+
+```ts
+import { MongoClient } from "mongodb";
+
+const url = process.env.MONGODB_URL;
+mongodb.ping({
+  // Not configured (and never run) while the variable is unset
+  client: url ? new MongoClient(url, { serverSelectionTimeoutMS: 8000 }) : undefined,
+  secrets: { url },
+  critical: true,
+});
+```
 
 ## Testing your own presets
 

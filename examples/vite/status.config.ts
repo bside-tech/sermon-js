@@ -1,5 +1,5 @@
 import { custom, defineStatus, generic, group } from "sermon-js";
-import { statuspage } from "sermon-js/providers";
+import { statuspage } from "sermon-js/presets";
 
 // Everything here runs without any key: public status pages, a plain HTTP check, and two
 // custom checks that show what usage bars and per-region rows look like.

@@ -70,8 +70,7 @@ Then trigger `status.tick()` on a schedule (see [Scheduling](docs/scheduling.md)
 | Importance | `critical: true` weighs more in the score; one critical service down means "outage" |
 
 ```ts
-import { fly } from "sermon-js/fly";
-import { deepgram, statuspage } from "sermon-js/providers";
+import { deepgram, fly, statuspage } from "sermon-js/presets";
 
 group({ title: "Platform", services: [
   // Never wakes a sleeping machine; reports each region on its own

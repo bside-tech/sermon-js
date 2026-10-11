@@ -33,20 +33,8 @@
       "api": [
         "./dist/api/index.d.cts"
       ],
-      "fly": [
-        "./dist/fly/index.d.cts"
-      ],
-      "gcp": [
-        "./dist/gcp/index.d.cts"
-      ],
-      "aws": [
-        "./dist/aws/index.d.cts"
-      ],
-      "providers": [
-        "./dist/providers/index.d.cts"
-      ],
-      "node": [
-        "./dist/node/index.d.cts"
+      "presets": [
+        "./dist/presets/index.d.cts"
       ],
       "stores/upstash": [
         "./dist/stores/upstash.d.cts"
@@ -92,54 +80,14 @@
         "default": "./dist/api/index.cjs"
       }
     },
-    "./fly": {
+    "./presets": {
       "import": {
-        "types": "./dist/fly/index.d.ts",
-        "default": "./dist/fly/index.js"
+        "types": "./dist/presets/index.d.ts",
+        "default": "./dist/presets/index.js"
       },
       "require": {
-        "types": "./dist/fly/index.d.cts",
-        "default": "./dist/fly/index.cjs"
-      }
-    },
-    "./gcp": {
-      "import": {
-        "types": "./dist/gcp/index.d.ts",
-        "default": "./dist/gcp/index.js"
-      },
-      "require": {
-        "types": "./dist/gcp/index.d.cts",
-        "default": "./dist/gcp/index.cjs"
-      }
-    },
-    "./aws": {
-      "import": {
-        "types": "./dist/aws/index.d.ts",
-        "default": "./dist/aws/index.js"
-      },
-      "require": {
-        "types": "./dist/aws/index.d.cts",
-        "default": "./dist/aws/index.cjs"
-      }
-    },
-    "./providers": {
-      "import": {
-        "types": "./dist/providers/index.d.ts",
-        "default": "./dist/providers/index.js"
-      },
-      "require": {
-        "types": "./dist/providers/index.d.cts",
-        "default": "./dist/providers/index.cjs"
-      }
-    },
-    "./node": {
-      "import": {
-        "types": "./dist/node/index.d.ts",
-        "default": "./dist/node/index.js"
-      },
-      "require": {
-        "types": "./dist/node/index.d.cts",
-        "default": "./dist/node/index.cjs"
+        "types": "./dist/presets/index.d.cts",
+        "default": "./dist/presets/index.cjs"
       }
     },
     "./stores/upstash": {
@@ -273,13 +221,9 @@
   "peerDependencies": {
     "@heroui/react": ">=3",
     "@tanstack/react-query": ">=5",
-    "mongodb": ">=5",
     "react": ">=18"
   },
   "peerDependenciesMeta": {
-    "mongodb": {
-      "optional": true
-    },
     "react": {
       "optional": true
     },

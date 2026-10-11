@@ -1,9 +1,6 @@
 import { custom, defineStatus, generic, group } from "../../src";
 import { createStatusHandler } from "../../src/api";
-import { aws } from "../../src/aws";
-import { fly } from "../../src/fly";
-import { signGoogleAssertion } from "../../src/gcp";
-import { signPusherRequest, statuspage } from "../../src/providers";
+import { aws, fly, mongodb, redis, signGoogleAssertion, signPusherRequest, statuspage } from "../../src/presets";
 import { upstashStore } from "../../src/stores/upstash";
 import { runCheck } from "../../src/testing";
 
@@ -66,6 +63,9 @@ export async function run() {
       return new Response(null, { status: 200 });
     },
   });
+  // Database presets take a client, so nothing here needs a driver
+  const mongo = await runCheck(mongodb.ping({ client: { db: () => ({ command: async () => ({ ok: 1 }) }) } }));
+  const redisPing = await runCheck(redis.ping({ client: { ping: async () => "PONG" } }));
   const pusherUrl = await signPusherRequest({ appId: "1", key: "k", secret: "s", path: "/channels", timestamp: 1 });
   const pair = await crypto.subtle.generateKey(
     { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
@@ -95,6 +95,8 @@ export async function run() {
     presets: {
       statuspage: page.status,
       fly: flyApp.status,
+      mongodb: mongo.status,
+      redis: redisPing.status,
       s3Signed: s3Authorization.startsWith("AWS4-HMAC-SHA256 Credential=AKIAEDGE/"),
       pusherSigned: /auth_signature=[0-9a-f]{64}$/.test(pusherUrl),
       googleJwtParts: assertion.split(".").length,

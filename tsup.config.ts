@@ -37,11 +37,7 @@ export default defineConfig([
     entry: {
       index: "src/index.ts",
       "api/index": "src/api/index.ts",
-      "fly/index": "src/fly/index.ts",
-      "gcp/index": "src/gcp/index.ts",
-      "aws/index": "src/aws/index.ts",
-      "providers/index": "src/providers/index.ts",
-      "node/index": "src/node/index.ts",
+      "presets/index": "src/presets/index.ts",
       "stores/upstash": "src/stores/upstash.ts",
       "stores/redis": "src/stores/redis.ts",
       "stores/sql": "src/stores/sql.ts",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { crashReason, fly } from "../src/fly";
+import { crashReason, fly } from "../src/presets";
 import { mockFetch, runCheck, type MockRoute } from "../src/testing";
 
 type Machine = { id: string; state: string; region?: string; checks?: unknown[]; events?: unknown[] };

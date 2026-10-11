@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aws } from "../src/aws";
-import { mongodb, redis } from "../src/node";
-import { pusher, signPusherRequest } from "../src/providers";
+import { aws, mongodb, pusher, redis, signPusherRequest } from "../src/presets";
 import { mockFetch, runCheck, type MockRoute } from "../src/testing";
 
 const awsSecrets = { accessKeyId: "AKIAEXAMPLE123", secretAccessKey: "secret-access-key-123" };
@@ -158,22 +156,64 @@ describe("redis.ping", () => {
 });
 
 describe("mongodb.ping", () => {
-  it("is not configured without a connection string", async () => {
-    expect((await runCheck(mongodb.ping({ secrets: { url: undefined } }))).status).toBe("unconfigured");
-  });
+  const fakeClient = (command: (cmd: Record<string, unknown>) => Promise<unknown>) => ({ db: () => ({ command }) });
 
-  it("is down, with the credentials redacted, when the server can't be reached", async () => {
-    const url = "mongodb://user:hunter2-password@127.0.0.1:1/db?serverSelectionTimeoutMS=200";
-    const result = await runCheck(mongodb.ping({ timeoutMs: 300, secrets: { url } }));
-    expect(result.status).toBe("down");
-    expect(result.error).toBeTruthy();
-    expect(result.error).not.toContain("hunter2-password");
-  });
-
-  // A real server, when available: set SERMON_TEST_MONGODB_URL
-  it.runIf(process.env.SERMON_TEST_MONGODB_URL)("pings a real server", async () => {
-    const result = await runCheck(mongodb.ping({ secrets: { url: process.env.SERMON_TEST_MONGODB_URL } }));
-    expect(result).toMatchObject({ status: "up", metrics: { connectMs: expect.any(Number) } });
+  it("pings through a client or a database handle", async () => {
+    const commands: unknown[] = [];
+    const client = fakeClient(async (cmd) => {
+      commands.push(cmd);
+      return { ok: 1 };
+    });
+    const result = await runCheck(mongodb.ping({ client, critical: true }));
+    expect(result).toMatchObject({ key: "mongodb", status: "up", probed: true });
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(commands).toEqual([{ ping: 1 }]);
+    // A Db works too
+    expect((await runCheck(mongodb.ping({ client: { command: async () => ({ ok: 1 }) } }))).status).toBe("up");
+    expect(mongodb.ping({ client })).toMatchObject({ kind: "mongodb.ping", name: "MongoDB", slowMs: 500 });
+  });
+
+  it("is not configured without a client", async () => {
+    const service = mongodb.ping({ client: undefined });
+    expect(service.missing).toEqual(['field "client"']);
+    expect((await runCheck(service)).status).toBe("unconfigured");
+  });
+
+  it("is down when the server can't be reached, with the connection string redacted", async () => {
+    const url = "mongodb://user:hunter2-password@db.internal:27017/app";
+    const client = fakeClient(async () => {
+      throw new Error(`Server selection timed out connecting to ${url}`);
+    });
+    const result = await runCheck(mongodb.ping({ client, secrets: { url } }));
+    expect(result).toMatchObject({ status: "down", error: "Server selection timed out connecting to ***" });
+  });
+
+  it("gives up on a client that never answers", async () => {
+    const client = fakeClient(() => new Promise(() => undefined));
+    const result = await runCheck(mongodb.ping({ client, timeoutMs: 50 }));
+    expect(result).toMatchObject({ status: "down", error: "Timed out" });
+  });
+
+  // A real server with the real driver, when available: set SERMON_TEST_MONGODB_URL
+  it.runIf(process.env.SERMON_TEST_MONGODB_URL)("pings a real server with the official driver", async () => {
+    const { MongoClient } = await import("mongodb");
+    const client = new MongoClient(process.env.SERMON_TEST_MONGODB_URL!, { serverSelectionTimeoutMS: 3000 });
+    try {
+      const result = await runCheck(mongodb.ping({ client }));
+      expect(result.status).toBe("up");
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it.runIf(process.env.SERMON_TEST_MONGODB_URL)("reports an unreachable real server as down", async () => {
+    const { MongoClient } = await import("mongodb");
+    const client = new MongoClient("mongodb://127.0.0.1:1/db", { serverSelectionTimeoutMS: 300 });
+    try {
+      expect((await runCheck(mongodb.ping({ client }))).status).toBe("down");
+    } finally {
+      await client.close();
+    }
   });
 });
