@@ -28,6 +28,7 @@ describe("edge runtime", () => {
       tick: 200,
       viaApi: 67,
       locks: [true, false],
+      presets: { statuspage: "degraded", fly: "sleeping", s3Signed: true, pusherSigned: true, googleJwtParts: 3 },
       nodeGlobals: ["undefined", "undefined"],
     });
   });

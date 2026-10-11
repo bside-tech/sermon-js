@@ -43,6 +43,56 @@
         "default": "./dist/api/index.cjs"
       }
     },
+    "./fly": {
+      "import": {
+        "types": "./dist/fly/index.d.ts",
+        "default": "./dist/fly/index.js"
+      },
+      "require": {
+        "types": "./dist/fly/index.d.cts",
+        "default": "./dist/fly/index.cjs"
+      }
+    },
+    "./gcp": {
+      "import": {
+        "types": "./dist/gcp/index.d.ts",
+        "default": "./dist/gcp/index.js"
+      },
+      "require": {
+        "types": "./dist/gcp/index.d.cts",
+        "default": "./dist/gcp/index.cjs"
+      }
+    },
+    "./aws": {
+      "import": {
+        "types": "./dist/aws/index.d.ts",
+        "default": "./dist/aws/index.js"
+      },
+      "require": {
+        "types": "./dist/aws/index.d.cts",
+        "default": "./dist/aws/index.cjs"
+      }
+    },
+    "./providers": {
+      "import": {
+        "types": "./dist/providers/index.d.ts",
+        "default": "./dist/providers/index.js"
+      },
+      "require": {
+        "types": "./dist/providers/index.d.cts",
+        "default": "./dist/providers/index.cjs"
+      }
+    },
+    "./node": {
+      "import": {
+        "types": "./dist/node/index.d.ts",
+        "default": "./dist/node/index.js"
+      },
+      "require": {
+        "types": "./dist/node/index.d.cts",
+        "default": "./dist/node/index.cjs"
+      }
+    },
     "./stores/upstash": {
       "import": {
         "types": "./dist/stores/upstash.d.ts",
@@ -101,10 +151,22 @@
     "eslint": "^9.22.0",
     "globals": "^16.0.0",
     "ioredis": "^6.0.0",
+    "mongodb": "^7.7.0",
     "tsup": "^8.3.5",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.26.1",
     "vitest": "^2.1.6"
   },
-  "packageManager": "pnpm@9.15.9"
+  "packageManager": "pnpm@9.15.9",
+  "dependencies": {
+    "aws4fetch": "^1.0.20"
+  },
+  "peerDependencies": {
+    "mongodb": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "mongodb": {
+      "optional": true
+    }
+  }
 }

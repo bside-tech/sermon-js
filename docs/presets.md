@@ -1,0 +1,123 @@
+# Presets
+
+A preset is a typed function that turns a few options into a service. Every preset takes the
+same five concerns: `name`, its own fields, `secrets`, `track`, `critical` (plus `description`,
+`slowMs`, `timeoutMs`). Import only what you use; the rest is never bundled.
+
+A service with an empty required secret or field is listed as **not configured** and never
+runs, so you can pass environment variables straight in.
+
+Rules applied to every preset: latency above `slowMs` turns up into degraded, HTTP 429 is
+degraded, timeouts and network errors are down.
+
+## Core: `sermon-js`
+
+| Preset | Calls | up | degraded | down | Reports |
+|---|---|---|---|---|---|
+| `generic.http({ name, url, method?, headers?, body?, secrets?, track? })` | The URL | 2xx/3xx, or a status in `track.status` | 429, slow, or `track.json` says so | Other status, network error, timeout | Whatever `track.json` returns |
+| `custom({ name, check, secrets? })` | Your function | `true`, nothing, or `up` | `degraded`, or slow | `false`, `down`, or a throw | Whatever you return |
+
+## Fly.io: `sermon-js/fly`
+
+```ts
+fly.app({ app: "my-api", secrets: { token }, track: { health: "/health" }, critical: true })
+```
+
+Checked **without ever waking a machine**: states come from the Machines API (control plane),
+and the health path is only called on machines that are already running, pinned to each one
+with `fly-force-instance-id`. A read-only token is enough (`fly tokens create readonly`).
+
+| | |
+|---|---|
+| up | Every running machine is healthy |
+| sleeping | All machines are stopped or suspended, without a crash |
+| degraded | Some machines are down, a Fly health check fails, one is slow, or the Machines API can't be read |
+| down | No machines, the app doesn't exist, or every machine is down (crashed, out of memory, failed, failing health) |
+
+Reports `metrics.machines` ("2/5 running") and one `instances` row per machine (region,
+machine ID, state, status, latency, error). Machines are keyed by region (`ams`, `ams#2`), so a
+region's history survives deploys.
+
+`track.health`: a path (default `"/"`), `false` for states only, or
+`{ path, anyStatus: true }` to accept any HTTP answer. `track.machines: false` hides the rows.
+
+## Google Cloud: `sermon-js/gcp`
+
+```ts
+gcp.instance({ instance: "encoder-eu", zone: "europe-west1-b", secrets: { serviceAccount }, track: { health: "http://host:8080/" } })
+```
+
+Never starts the VM: the status comes from the Compute API, and the health URL is only called
+while it is RUNNING. The service account needs `compute.instances.get` (e.g. Compute Viewer).
+Authentication uses Web Crypto, with no Google library.
+
+| | |
+|---|---|
+| up | RUNNING (and the health URL answers) |
+| sleeping | TERMINATED, STOPPED or SUSPENDED |
+| degraded | PROVISIONING / STAGING, or slow |
+| down | Compute API error, the health URL fails, or an unexpected state |
+
+Reports `metrics.vm` and `metrics.zone`.
+
+## AWS and S3-compatible storage: `sermon-js/aws`
+
+| Preset | Calls | Notes |
+|---|---|---|
+| `aws.credentials({ name, secrets: { accessKeyId, secretAccessKey } })` | STS `GetCallerIdentity` | Proves the credentials work, not that a given AWS service is healthy. For services with no cheap probe. |
+| `aws.s3Bucket({ bucket, endpoint?, region?, secrets })` | `HeadBucket` | Works with AWS S3, Tigris, Cloudflare R2, MinIO. down when missing or denied. |
+
+## Providers: `sermon-js/providers`
+
+One cheap, read-only call each unless noted. All take `secrets` and are up when the key works,
+down when it is rejected.
+
+| Preset | Calls | Extra |
+|---|---|---|
+| `deepgram({ secrets: { apiKey }, track?: { balance } })` | Projects, then balances | `metrics.balance`; degraded below `balance.warnBelow` (20) |
+| `gladia`, `anthropic`, `gemini`, `cambai` (`secrets: { apiKey }`) | List live sessions / models / languages | |
+| `speechmatics({ secrets: { apiKey }, baseUrl? })` | Batch jobs (limit 1) | |
+| `openai({ secrets: { apiKey }, organization?, track?: { model } })` | Models, or one model | Can't see billing problems |
+| `deepl({ secrets: { apiKey }, track?: { quota } })` | `/v2/usage` | `usage`: characters; degraded at `quota.warnAbovePct` (90) |
+| `azureTranslator({ secrets: { apiKey }, region? })` | Translates one character | |
+| `googleTranslate({ secrets: { serviceAccount } })` | Token, then v3 `supportedLanguages` | `metrics.languages`. The secret is the service-account JSON, not an API key |
+| `mux({ secrets: { tokenId, tokenSecret } })` | Live streams (limit 1) | |
+| `cloudflareStream({ accountId, secrets: { token }, track?: { storage } })` | Videos and `storage-usage`, in parallel | `usage`: storage minutes; `metrics.videos`; degraded at 90% |
+| `mailersend({ secrets: { apiKey } })` | `/v1/api-quota` | `usage`: API requests with reset time; degraded under 10% left |
+| `github({ secrets: { token }, track?: { repo, rateLimit } })` | `/rate_limit` (free), optionally a repo's releases | `usage`: requests this hour; down if the repo can't be read |
+| `revolut({ secrets: { apiKey }, environment? })` | Merchant orders (limit 1) | `environment: "sandbox"` for the sandbox API |
+| `attendee({ secrets: { apiKey }, baseUrl? })` | Bots (page size 1) | |
+| `axiom({ dataset, secrets: { token }, edge? })` | Ingests an empty batch | Writes nothing |
+| `upstashRedis({ url, secrets: { token } })` | `PING` over REST | Upstash, Vercel KV and compatible servers |
+| `pusher({ appId, cluster?, secrets: { key, secret }, track?: { connections } })` | Channel list, then each channel's `subscription_count` | See below |
+| `statuspage({ url, name? })` | `/api/v2/status.json` | Any Atlassian Statuspage (Fly.io, Vercel, Cloudflare, GitHub…): none → up, minor → degraded, major/critical → down |
+
+### Pusher
+
+Pusher has no usage API, so connections are **estimated** by summing subscription counts
+(enable "subscription counting" in the app settings). Clients on several channels make the
+estimate run slightly high, which is the safe direction for a quota alert. Set
+`track.connections.max` to your plan's limit to get two usage bars (connections now, peak
+today); the daily peak (UTC) is kept in the store's cache. degraded when today's peak reaches
+`warnAbovePct` (90) of the limit, or when subscription counting is off. Message counts aren't
+available from Pusher.
+
+## Node only: `sermon-js/node`
+
+| Preset | Needs | Calls |
+|---|---|---|
+| `mongodb.ping({ secrets: { url } })` | the `mongodb` package | `ping`; reports `metrics.connectMs` |
+| `redis.ping({ client })` | a connected ioredis or node-redis client | `PING` |
+
+## Testing your own presets
+
+```ts
+import { mockFetch, runCheck } from "sermon-js/testing";
+
+const fetch = mockFetch([{ url: "/health", status: 200 }]);
+const result = await runCheck(myPreset({ … }), { fetch });
+expect(result.status).toBe("up");
+expect(fetch.calls).toHaveLength(1);
+```
+
+`runCheck` runs a service exactly as the engine does (shared rules, timing, redaction).

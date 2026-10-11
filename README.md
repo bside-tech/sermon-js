@@ -6,9 +6,9 @@ Describe the services you depend on, and get checks, scoring, history and an HTT
 runs anywhere: Node, Bun, Deno, Vercel, Netlify, Cloudflare Workers. No hosting assumptions,
 no required database.
 
-> **Status: early.** The core, the HTTP API, scheduling and the memory/Redis stores are done
-> and tested. Provider presets (Fly, GCP, AI providers…), SQL/MongoDB stores and the React UI
-> kit are on the way. See [Roadmap](#roadmap).
+> **Status: early.** The core, the HTTP API, scheduling, the memory/Redis stores and the
+> presets (Fly, GCP, AWS, 20 providers) are done and tested. SQL/MongoDB stores and the React
+> UI kit are on the way. See [Roadmap](#roadmap).
 
 ```bash
 npm install sermon-js
@@ -59,7 +59,7 @@ Then trigger `status.tick()` on a schedule (see [Scheduling](docs/scheduling.md)
 
 ## Describing services
 
-`services` is a list of **presets** (`generic.http()`, more coming), **custom checks** and
+`services` is a list of **presets** (see [all presets](docs/presets.md)), **custom checks** and
 **groups**. Groups can nest. Every service takes the same five concerns:
 
 | Concern | Option |
@@ -69,6 +69,18 @@ Then trigger `status.tick()` on a schedule (see [Scheduling](docs/scheduling.md)
 | Secrets it needs | `secrets: { … }`: redacted from public errors automatically |
 | What to track | `track: { … }`: options of the preset |
 | Importance | `critical: true` weighs more in the score; one critical service down means "outage" |
+
+```ts
+import { fly } from "sermon-js/fly";
+import { deepgram, statuspage } from "sermon-js/providers";
+
+group({ title: "Platform", services: [
+  // Never wakes a sleeping machine; reports each region on its own
+  fly.app({ app: "my-api", secrets: { token: process.env.FLY_API_TOKEN }, critical: true }),
+  deepgram({ secrets: { apiKey: process.env.DEEPGRAM_API_KEY }, track: { balance: { warnBelow: 20 } } }),
+  statuspage({ name: "Fly.io", url: "https://status.flyio.net" }),
+] })
+```
 
 A service whose required secret or field is empty (say, an environment variable that isn't
 set yet) is listed as **not configured**: it never runs and never throws.
@@ -204,7 +216,7 @@ runStoreConformance("my store", () => myStore(), { describe, it, expect });
 - [x] Host-agnostic scheduling: `tick()`, `startScheduler`, `/tick`, refresh on read
 - [x] HTTP API handler, Node adapter
 - [x] Stores: memory, Upstash REST, any Redis client
-- [ ] Presets: Fly apps (sleep-safe, per region), GCP instances, AWS, Statuspage, AI/translation/video/email providers
+- [x] Presets: Fly apps (sleep-safe, per region), GCP instances, AWS/S3, Statuspage, Pusher, AI/translation/video/email providers, MongoDB, Redis
 - [ ] Stores: SQL (Postgres, MySQL, SQLite), MongoDB
 - [ ] React UI kit (headless hooks + HeroUI components)
 

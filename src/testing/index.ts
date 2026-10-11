@@ -1,3 +1,6 @@
+import { resolveTree, type ServiceDefinition } from "../config";
+import { runService } from "../runner";
+import { collectSecretValues } from "../sanitize";
 import type { CheckSample, RunSummary, StatusStore } from "../store";
 import type { CheckResult } from "../types";
 
@@ -255,4 +258,31 @@ export function mockFetch(routes: MockRoute[]): MockFetch {
     return new Response(body || null, { status: route.status ?? 200, headers: route.headers });
   };
   return Object.assign(impl as typeof fetch, { calls });
+}
+
+/**
+ * Run one service exactly as the engine would (shared rules, redaction, timing) and return
+ * its result. For testing presets and custom checks:
+ *
+ * ```ts
+ * const fetch = mockFetch([{ url: "/health", status: 200 }]);
+ * const result = await runCheck(myPreset({ … }), { fetch });
+ * ```
+ */
+export async function runCheck(
+  service: ServiceDefinition,
+  options: { fetch?: typeof fetch; now?: () => number; cache?: Map<string, string> } = {}
+): Promise<CheckResult> {
+  const [resolved] = [...resolveTree([service]).services.values()];
+  const cache = options.cache ?? new Map<string, string>();
+  return runService({
+    service: resolved!,
+    secretValues: collectSecretValues(Object.values(service.secrets)),
+    fetch: options.fetch,
+    now: options.now,
+    cache: {
+      get: async (key) => cache.get(key) ?? null,
+      set: async (key, value) => void cache.set(key, value),
+    },
+  });
 }
