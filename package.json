@@ -1,0 +1,110 @@
+{
+  "name": "sermon-js",
+  "version": "0.0.0",
+  "description": "Service monitor: build status pages fast. Typed checks and presets, sleep-safe probes, scoring, history, a host-agnostic API and a React UI kit.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bside-tech/sermon-js.git"
+  },
+  "homepage": "https://github.com/bside-tech/sermon-js#readme",
+  "bugs": "https://github.com/bside-tech/sermon-js/issues",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./api": {
+      "import": {
+        "types": "./dist/api/index.d.ts",
+        "default": "./dist/api/index.js"
+      },
+      "require": {
+        "types": "./dist/api/index.d.cts",
+        "default": "./dist/api/index.cjs"
+      }
+    },
+    "./stores/upstash": {
+      "import": {
+        "types": "./dist/stores/upstash.d.ts",
+        "default": "./dist/stores/upstash.js"
+      },
+      "require": {
+        "types": "./dist/stores/upstash.d.cts",
+        "default": "./dist/stores/upstash.cjs"
+      }
+    },
+    "./stores/redis": {
+      "import": {
+        "types": "./dist/stores/redis.d.ts",
+        "default": "./dist/stores/redis.js"
+      },
+      "require": {
+        "types": "./dist/stores/redis.d.cts",
+        "default": "./dist/stores/redis.cjs"
+      }
+    },
+    "./testing": {
+      "import": {
+        "types": "./dist/testing/index.d.ts",
+        "default": "./dist/testing/index.js"
+      },
+      "require": {
+        "types": "./dist/testing/index.d.cts",
+        "default": "./dist/testing/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest --run --typecheck",
+    "test:watch": "vitest",
+    "changeset": "changeset",
+    "release": "pnpm build && changeset publish"
+  },
+  "keywords": [
+    "status-page",
+    "uptime",
+    "monitoring",
+    "health-check",
+    "service-monitor"
+  ],
+  "devDependencies": {
+    "@changesets/cli": "^2.27.9",
+    "@edge-runtime/vm": "^5.0.0",
+    "@eslint/js": "^9.22.0",
+    "@types/node": "^22.18.6",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.22.0",
+    "globals": "^16.0.0",
+    "ioredis": "^6.0.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.26.1",
+    "vitest": "^2.1.6"
+  },
+  "packageManager": "pnpm@9.15.9"
+}
