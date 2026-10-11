@@ -1,12 +1,13 @@
 import js from "@eslint/js";
 import globals from "globals";
+import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "examples/**/dist", "node_modules"] },
+  { ignores: ["dist", "examples/**/dist", "examples/**/node_modules", "node_modules"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2022,
       // Core must stay runtime-agnostic: only web-standard globals
@@ -20,7 +21,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ["*.config.ts", "test/**/*.ts", "src/node/**/*.ts"],
+    files: ["src/react/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: { ...reactHooks.configs.recommended.rules },
+  },
+  {
+    files: ["*.config.ts", "test/**/*.{ts,tsx}", "src/node/**/*.ts", "examples/**/*.{ts,tsx}"],
     languageOptions: { globals: { ...globals.node } },
     rules: { "no-restricted-imports": "off", "no-restricted-globals": "off" },
   }

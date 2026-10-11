@@ -328,6 +328,7 @@ export function defineStatus(config: StatusConfig): Status {
         lastRunTrigger: lastRun?.trigger ?? null,
         nextDueAt: lastRun ? lastRun.at + intervalMs : null,
         intervalMs,
+        retentionMs,
         ...scoreOf(latest),
         tree: tree.map(toSnapshot),
       };

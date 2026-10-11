@@ -1,14 +1,13 @@
 # sermon-js
 
-**Ser**vice **mon**itor: the data engine behind a status page, as a TypeScript library.
+**Ser**vice **mon**itor: everything behind a status page, as a TypeScript library.
 
-Describe the services you depend on, and get checks, scoring, history and an HTTP API that
-runs anywhere: Node, Bun, Deno, Vercel, Netlify, Cloudflare Workers. No hosting assumptions,
-no required database.
+Describe the services you depend on, and get checks, scoring, history, an HTTP API and a
+ready-made page. It runs anywhere: Node, Bun, Deno, Vercel, Netlify, Cloudflare Workers.
+No hosting assumptions, no required database.
 
-> **Status: early.** The core, the HTTP API, scheduling, the stores (memory, Redis, SQL,
-> MongoDB) and the presets (Fly, GCP, AWS, 20 providers) are done and tested. The React UI kit
-> is on the way. See [Roadmap](#roadmap).
+> **Status: pre-release.** Everything below is built and tested; the first npm release is
+> pending. See [Roadmap](#roadmap).
 
 ```bash
 npm install sermon-js
@@ -212,6 +211,19 @@ defineStatus({ store: mongoStore({ db: client.db("status") }), services });
 Anything else is a small interface to implement and a conformance suite to check it with.
 See [Stores](docs/stores.md).
 
+## UI
+
+```tsx
+import { StatusPage } from "sermon-js/react/heroui";
+
+<StatusPage baseUrl="/api" brand={<Logo />} />
+```
+
+A complete page (score, history, collapsible sections, per-region details, usage bars,
+on-demand checks, deep links, theme switch) on HeroUI and Tailwind, plus a headless layer of
+hooks and helpers to build your own. See [UI kit](docs/ui.md) and
+[`examples/vite`](examples/vite).
+
 ## Roadmap
 
 - [x] Core: config tree, custom checks, `generic.http`, runner, scoring, history, statistics
@@ -220,7 +232,8 @@ See [Stores](docs/stores.md).
 - [x] Stores: memory, Upstash REST, any Redis client
 - [x] Presets: Fly apps (sleep-safe, per region), GCP instances, AWS/S3, Statuspage, Pusher, AI/translation/video/email providers, MongoDB, Redis
 - [x] Stores: SQL (Postgres, MySQL/MariaDB, SQLite), MongoDB
-- [ ] React UI kit (headless hooks + HeroUI components)
+- [x] React UI kit (headless hooks + HeroUI components)
+- [ ] First npm release
 
 ## License
 

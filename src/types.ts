@@ -177,6 +177,8 @@ export type StatusSnapshot = {
   /** When the next full run is due, based on `interval` */
   nextDueAt: number | null;
   intervalMs: number;
+  /** How long history is kept */
+  retentionMs: number;
   score: number | null;
   label: ScoreLabel;
   counts: Record<Status, number>;

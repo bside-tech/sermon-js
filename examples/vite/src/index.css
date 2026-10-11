@@ -1,0 +1,9 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+@import "sermon-js/react/heroui/styles.css";
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

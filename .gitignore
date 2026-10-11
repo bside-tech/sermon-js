@@ -6,3 +6,5 @@ coverage
 !.env.example
 *.tsbuildinfo
 .DS_Store
+examples/**/node_modules
+examples/**/dist

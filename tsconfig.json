@@ -10,6 +10,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
+    "jsx": "react-jsx",
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,

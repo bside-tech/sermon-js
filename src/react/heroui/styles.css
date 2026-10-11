@@ -1,0 +1,11 @@
+/*
+ * sermon-js UI kit. Import after Tailwind and HeroUI:
+ *
+ *   @import "tailwindcss";
+ *   @import "@heroui/styles";
+ *   @import "sermon-js/react/heroui/styles.css";
+ *
+ * It only tells Tailwind where the kit's components are, so their classes get generated.
+ * Colors, radius and dark mode follow your HeroUI theme.
+ */
+@source "../../";
