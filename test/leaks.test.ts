@@ -89,6 +89,18 @@ describe("secrets never reach public results", () => {
     );
   });
 
+  it("quotes response bodies by default and never with hideResponseBodies", async () => {
+    const service = () => generic.http({ name: "internal", url: "https://internal.test/health" });
+    const fetch = () => mockFetch([{ url: "internal.test", status: 500, body: "DEBUG dump: DATABASE_PASSWORD=hunter2" }]);
+    expect((await runCheck(service(), { fetch: fetch() })).error).toBe("HTTP 500: DEBUG dump: DATABASE_PASSWORD=hunter2");
+    expect((await runCheck(service(), { fetch: fetch(), hideResponseBodies: true })).error).toBe("HTTP 500");
+
+    const status = defineStatus({ services: [service()], fetch: fetch(), hideResponseBodies: true });
+    const report = await status.run();
+    expect(report.results[0]).toMatchObject({ status: "down", httpStatus: 500, error: "HTTP 500" });
+    expect(JSON.stringify(await status.snapshot())).not.toContain("hunter2");
+  });
+
   it("truncates only after redacting", () => {
     const message = `${"y".repeat(290)} ${KEY}`;
     const out = sanitizeError({ message, secretValues: collectSecretValues([KEY]) })!;

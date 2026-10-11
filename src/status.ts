@@ -28,6 +28,13 @@ export type StatusConfig = {
   /** How long history is kept (default "7d") */
   retention?: Duration;
   scoring?: ScoringInput;
+  /**
+   * Never quote what a service replied in public errors: a failed HTTP answer is reported by
+   * its status code only ("HTTP 500"). Turn it on when a checked service could answer with
+   * something sensitive, such as a debug page. Default false. Errors returned by `custom()`
+   * checks are yours and are kept (redacted) either way.
+   */
+  hideResponseBodies?: boolean;
   /** Receives configuration warnings (default: `console.warn`) */
   onWarning?: (message: string) => void;
   /** Override `fetch` (tests, custom agents) */
@@ -237,6 +244,7 @@ export function defineStatus(config: StatusConfig): Status {
         cacheFor: checkCache,
         now,
         fetch: config.fetch,
+        hideResponseBodies: config.hideResponseBodies,
       });
 
       // The overall score always reflects the whole system: merge with what we already know

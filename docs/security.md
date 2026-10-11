@@ -48,7 +48,8 @@ is just `HTTP 401: credentials rejected`. That is where providers quote the key 
   Don't use them.
 - **Responses of your own services are quoted in errors** (the first 200 characters of a
   non-2xx body, except 401/403). If an internal service can answer with a debug page, point
-  the check at a plain health route.
+  the check at a plain health route, or set `hideResponseBodies: true` in `defineStatus`:
+  failed answers are then reported by status code only (`HTTP 500`). It is off by default.
 - **In a `custom()` check**, return short, fixed error texts rather than whole response
   bodies, and never put a secret in `metrics`.
 - **Protect `/tick` with a header**, not `?key=`: query strings end up in access logs, CDN

@@ -13,6 +13,8 @@ export type RunServiceOptions = {
   cache: CheckCache;
   now?: () => number;
   fetch?: typeof fetch;
+  /** Report failed HTTP answers by status code only */
+  hideResponseBodies?: boolean;
 };
 
 /**
@@ -28,6 +30,7 @@ export async function runService({
   cache,
   now = () => Date.now(),
   fetch: fetchImpl,
+  hideResponseBodies,
 }: RunServiceOptions): Promise<CheckResult> {
   const checkedAt = now();
   if (service.missing.length > 0) {
@@ -38,7 +41,7 @@ export async function runService({
   const controller = new AbortController();
   const ctx: CheckContext<SecretsInput> = {
     secrets: service.secrets as Record<string, string>,
-    http: createHttp({ timeoutMs: service.timeoutMs, signal: controller.signal, fetch: fetchImpl, redact }),
+    http: createHttp({ timeoutMs: service.timeoutMs, signal: controller.signal, fetch: fetchImpl, redact, hideResponseBodies }),
     measure,
     combine,
     signal: controller.signal,

@@ -162,7 +162,8 @@ await status.history({ range: "24h" });   // score history in buckets ("24h" | "
 await status.serviceHistory("queue-depth");
 ```
 
-Options: `interval` (default `"5m"`), `retention` (`"7d"`), `scoring`, `store`.
+Options: `interval` (default `"5m"`), `retention` (`"7d"`), `scoring`, `store`, `hideResponseBodies`
+(report failed answers by status code only; see [Security](docs/security.md)).
 
 ## HTTP API
 

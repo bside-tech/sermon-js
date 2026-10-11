@@ -47,12 +47,15 @@ export function createHttp({
   signal,
   fetch: fetchImpl = fetch,
   redact = (text) => text,
+  hideResponseBodies = false,
 }: {
   timeoutMs: number;
   signal?: AbortSignal;
   fetch?: typeof fetch;
   /** Removes secrets from response bodies before they are cut into error messages */
   redact?: (text: string) => string;
+  /** Report failed answers by status code only, never quoting what the target replied */
+  hideResponseBodies?: boolean;
 }) {
   return async function http(url: string, init: HttpInit = {}): Promise<HttpResult> {
     const { okStatuses, ...requestInit } = init;
@@ -85,7 +88,7 @@ export function createHttp({
             status: res.status === 429 ? "degraded" : "down",
             latencyMs,
             httpStatus: res.status,
-            error: httpError({ status: res.status, text: redact(text) }),
+            error: httpError({ status: res.status, text: hideResponseBodies ? "" : redact(text) }),
           };
       return { ok, status: res.status, latencyMs, text, json, headers: res.headers, outcome };
     } catch (error) {

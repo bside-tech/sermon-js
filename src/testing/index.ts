@@ -271,7 +271,7 @@ export function mockFetch(routes: MockRoute[]): MockFetch {
  */
 export async function runCheck(
   service: ServiceDefinition,
-  options: { fetch?: typeof fetch; now?: () => number; cache?: Map<string, string> } = {}
+  options: { fetch?: typeof fetch; now?: () => number; cache?: Map<string, string>; hideResponseBodies?: boolean } = {}
 ): Promise<CheckResult> {
   const [resolved] = [...resolveTree([service]).services.values()];
   const cache = options.cache ?? new Map<string, string>();
@@ -280,6 +280,7 @@ export async function runCheck(
     secretValues: collectSecretValues([...Object.values(service.secrets), ...(service.sensitive ?? [])]),
     fetch: options.fetch,
     now: options.now,
+    hideResponseBodies: options.hideResponseBodies,
     cache: {
       get: async (key) => cache.get(key) ?? null,
       set: async (key, value) => void cache.set(key, value),
