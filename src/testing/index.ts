@@ -277,7 +277,7 @@ export async function runCheck(
   const cache = options.cache ?? new Map<string, string>();
   return runService({
     service: resolved!,
-    secretValues: collectSecretValues(Object.values(service.secrets)),
+    secretValues: collectSecretValues([...Object.values(service.secrets), ...(service.sensitive ?? [])]),
     fetch: options.fetch,
     now: options.now,
     cache: {

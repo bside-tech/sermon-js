@@ -21,6 +21,16 @@ function snippet(text: string) {
   return trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed;
 }
 
+/**
+ * The public error for a failed HTTP answer. Bodies of rejected credentials are left out:
+ * providers echo the key back there, often only partly masked.
+ */
+function httpError({ status, text }: { status: number; text: string }) {
+  if (status === 401 || status === 407) return `HTTP ${status}: credentials rejected`;
+  if (status === 403) return "HTTP 403: access denied";
+  return `HTTP ${status}${text ? `: ${snippet(text)}` : ""}`;
+}
+
 /** `true`/nothing → up, `false` → down, outcomes pass through */
 export function normalizeReturn(value: CheckReturn): CheckOutcome {
   if (value === undefined || value === null || value === true) return { status: "up" };
@@ -36,10 +46,13 @@ export function createHttp({
   timeoutMs,
   signal,
   fetch: fetchImpl = fetch,
+  redact = (text) => text,
 }: {
   timeoutMs: number;
   signal?: AbortSignal;
   fetch?: typeof fetch;
+  /** Removes secrets from response bodies before they are cut into error messages */
+  redact?: (text: string) => string;
 }) {
   return async function http(url: string, init: HttpInit = {}): Promise<HttpResult> {
     const { okStatuses, ...requestInit } = init;
@@ -72,7 +85,7 @@ export function createHttp({
             status: res.status === 429 ? "degraded" : "down",
             latencyMs,
             httpStatus: res.status,
-            error: `HTTP ${res.status}${text ? `: ${snippet(text)}` : ""}`,
+            error: httpError({ status: res.status, text: redact(text) }),
           };
       return { ok, status: res.status, latencyMs, text, json, headers: res.headers, outcome };
     } catch (error) {

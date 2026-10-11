@@ -40,6 +40,12 @@ export type StatusHandlerOptions = {
   cache?: { status?: number; history?: number } | false;
   /** Allow other origins to call the API: `true` for any, or one origin (default: same-origin only) */
   cors?: boolean | string;
+  /**
+   * Receives unexpected failures (e.g. the store is unreachable). `message` has every configured
+   * secret and credential-shaped value removed; `error` is the raw value, which may contain
+   * connection strings: don't print it. Default: `console.error` of `message` only.
+   */
+  onError?: (failure: { message: string; error: unknown }) => void;
 };
 
 export type StatusHandler = (request: Request, context?: HandlerContext) => Promise<Response>;
@@ -77,6 +83,18 @@ function presentedSecret(request: Request, url: URL) {
  * - `POST /run/:key`               run one service now (rate limited)
  * - `GET|POST /tick`               run everything if due (for schedulers); `?force=1` with the secret
  */
+/** An error as loggable text: name, message, causes and stack frames */
+function describeError(error: unknown) {
+  if (!(error instanceof Error)) return String(error);
+  const parts = [error.stack ?? `${error.name}: ${error.message}`];
+  let cause = (error as Error & { cause?: unknown }).cause;
+  for (let depth = 0; cause && depth < 3; depth++) {
+    parts.push(`Caused by: ${cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause)}`);
+    cause = cause instanceof Error ? (cause as Error & { cause?: unknown }).cause : undefined;
+  }
+  return parts.join("\n");
+}
+
 export function createStatusHandler(status: Status, options: StatusHandlerOptions = {}): StatusHandler {
   const basePath = `/${(options.basePath ?? "/api").replace(/^\/+|\/+$/g, "")}`.replace(/^\/$/, "");
   const runAllMs = toMs(options.rateLimits?.runAll ?? "60s");
@@ -138,14 +156,19 @@ export function createStatusHandler(status: Status, options: StatusHandlerOption
     if (basePath && url.pathname !== basePath && !url.pathname.startsWith(`${basePath}/`)) {
       return json(request, { error: "Not found" }, { status: 404 });
     }
-    const segments = url.pathname
-      .slice(basePath.length)
-      .split("/")
-      .filter(Boolean)
-      .map((segment) => decodeURIComponent(segment));
-    const [first, second, third] = segments;
-
     if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
+
+    let segments: string[];
+    try {
+      segments = url.pathname
+        .slice(basePath.length)
+        .split("/")
+        .filter(Boolean)
+        .map((segment) => decodeURIComponent(segment));
+    } catch {
+      return json(request, { error: "Not found" }, { status: 404 });
+    }
+    const [first, second, third] = segments;
 
     try {
       if (method === "GET" && first === "status" && segments.length === 1) {
@@ -202,7 +225,10 @@ export function createStatusHandler(status: Status, options: StatusHandlerOption
 
       return json(request, { error: "Not found" }, { status: 404 });
     } catch (error) {
-      console.error("[sermon-js]", error);
+      // Never log the raw error: driver and store errors can carry connection strings
+      const message = status.redact(describeError(error));
+      if (options.onError) options.onError({ message, error });
+      else console.error(`[sermon-js] ${message}`);
       return json(request, { error: "Internal error" }, { status: 500 });
     }
   };
@@ -251,7 +277,8 @@ export function toNodeListener(handler: StatusHandler) {
       response.headers.forEach((value, name) => res.setHeader(name, value));
       res.end(await response.text());
     } catch (error) {
-      console.error("[sermon-js]", error);
+      // The handler reports its own failures; this only covers a broken request or response
+      console.error(`[sermon-js] ${error instanceof Error ? error.name : "Error"} while serving a request`);
       res.statusCode = 500;
       res.end('{"error":"Internal error"}');
     }

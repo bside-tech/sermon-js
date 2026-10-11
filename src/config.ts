@@ -17,7 +17,13 @@ export type ServiceDefinition = {
   timeoutMs: number;
   /** Natural identity (e.g. `fly.app:my-app`): keeps history across renames and moves */
   identity?: string;
+  /**
+   * Hidden from `console.log`, `JSON.stringify` and object spreads (the property is not
+   * enumerable), so a logged or serialized configuration never prints credentials.
+   */
   secrets: SecretsInput;
+  /** Other values to redact from public text (e.g. credentials given as headers). Hidden like `secrets`. */
+  sensitive?: string[];
   /** Required secrets/fields that are empty: the service is shown as "not configured" and never runs */
   missing: string[];
   check: AnyCheck;
@@ -41,6 +47,24 @@ export function group(options: { title: string; description?: string; services: 
     description: options.description,
     services: options.services ?? [],
   };
+}
+
+/**
+ * Keep credentials out of anything that prints or serializes a service: loggers, error
+ * reporters and `util.inspect` only walk enumerable properties.
+ */
+export function hideSecrets<T extends { secrets: SecretsInput; sensitive?: string[] }>(
+  service: T,
+  { secrets, sensitive }: { secrets: SecretsInput; sensitive?: string[] }
+): T {
+  Object.defineProperty(service, "secrets", { value: secrets, enumerable: false, writable: false, configurable: true });
+  Object.defineProperty(service, "sensitive", {
+    value: sensitive ?? [],
+    enumerable: false,
+    writable: false,
+    configurable: true,
+  });
+  return service;
 }
 
 const isEmpty = (value: unknown) => value === undefined || value === null || value === "";
@@ -69,7 +93,7 @@ export function custom<Secrets extends SecretsInput = Record<never, never>>(
     .filter((name) => isEmpty(secrets[name]))
     .map((name) => `secret "${name}"`);
   if (options.enabled === false) missing.push("disabled");
-  return {
+  const service: ServiceDefinition = {
     node: "service",
     kind: "custom",
     name: options.name,
@@ -81,6 +105,7 @@ export function custom<Secrets extends SecretsInput = Record<never, never>>(
     missing,
     check: options.check as AnyCheck,
   };
+  return hideSecrets(service, { secrets });
 }
 
 /**
@@ -118,6 +143,8 @@ export type PresetSpec<O extends PresetOptionsShape, Required extends string> = 
   defaults?: { slowMs?: number; timeoutMs?: number };
   /** Name, natural identity and description derived from the options */
   derive: (options: O) => { name: string; identity?: string; description?: string };
+  /** Values outside `secrets` that must never show in public text (e.g. credentials in headers) */
+  sensitive?: (options: O) => Array<string | undefined>;
   // NoInfer: the required set is inferred from `requiredSecrets` only, never from this parameter
   check: (ctx: PresetContext<O, NoInfer<Required>>) => Promise<CheckReturn> | CheckReturn;
 };
@@ -153,7 +180,7 @@ export function definePreset<O extends PresetOptionsShape>() {
       // A name derived from an empty field (e.g. an unset env var) falls back to the kind:
       // the service is still listed, as "not configured"
       const name = options.name?.trim() || derived.name?.trim() || spec.kind;
-      return {
+      const service: ServiceDefinition = {
         node: "service",
         kind: spec.kind,
         name,
@@ -166,6 +193,8 @@ export function definePreset<O extends PresetOptionsShape>() {
         missing,
         check: (ctx) => spec.check({ ...ctx, options } as unknown as PresetContext<O, Required>),
       };
+      const sensitive = (spec.sensitive?.(options) ?? []).filter((value): value is string => !!value);
+      return hideSecrets(service, { secrets, sensitive });
     };
   };
 }
@@ -246,7 +275,8 @@ export function resolveTree(nodes: ServiceNode[]): ResolvedTree {
           `Two services resolve to "${base}" (${node.kind} "${node.name}"): the second one is tracked as "${key}".`
         );
       }
-      services.set(key, { ...node, key });
+      // The spread drops the hidden properties: put them back, still hidden
+      services.set(key, hideSecrets({ ...node, key }, { secrets: node.secrets, sensitive: node.sensitive }));
       return { type: "service", key };
     });
 

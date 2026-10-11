@@ -26,8 +26,9 @@ show when its data is stale, which is how you notice a scheduler that stopped fi
 createStatusHandler(status, { secret: process.env.TICK_SECRET });
 ```
 
-Send the secret as `Authorization: Bearer <secret>`, `x-sermon-secret: <secret>` or
-`?key=<secret>`. Without a secret the route is public but harmless: it only runs when due.
+Send the secret as `Authorization: Bearer <secret>` or `x-sermon-secret: <secret>`. `?key=<secret>`
+also works, for schedulers that can only call a URL, but query strings end up in access logs:
+prefer a header. Without a secret the route is public but harmless: it only runs when due.
 Callers holding the secret can add `?force=1` to run regardless.
 
 Works with cron-job.org and similar services, uptime monitors, system cron

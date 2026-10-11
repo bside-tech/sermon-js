@@ -21,6 +21,17 @@ export type GenericHttpOptions<Secrets extends SecretsInput = SecretsInput> = Pr
   };
 };
 
+const SENSITIVE_HEADER = /auth|key|token|secret|cookie|password|signature|credential/i;
+
+/** Credentials are often written straight into a header: redact them like declared secrets */
+function sensitiveHeaderValues(headers: GenericHttpOptions["headers"]) {
+  if (!headers || typeof headers === "function") return [];
+  return Object.entries(headers)
+    .filter(([name]) => SENSITIVE_HEADER.test(name))
+    // "Bearer abc" → also "abc" alone, which is how an API would echo it
+    .flatMap(([, value]) => [value, value.replace(/^\S+\s+/, "")]);
+}
+
 const preset = definePreset<GenericHttpOptions>()({
   kind: "generic.http",
   requiredFields: ["url"],
@@ -29,6 +40,7 @@ const preset = definePreset<GenericHttpOptions>()({
     name: options.name,
     description: `HTTP ${options.method ?? "GET"} request`,
   }),
+  sensitive: (options) => sensitiveHeaderValues(options.headers),
   check: async ({ options, secrets, http }) => {
     const headers =
       typeof options.headers === "function"

@@ -2,7 +2,7 @@ import { resolveTree, type ResolvedNode, type ResolvedService, type ServiceNode 
 import { toMs, type Duration } from "./duration";
 import { bucketRuns, computeServiceStats, RANGES } from "./history";
 import { runServices } from "./runner";
-import { collectSecretValues } from "./sanitize";
+import { collectSecretValues, redactText } from "./sanitize";
 import { computeScore, resolveScoring, type Scoring, type ScoringInput } from "./score";
 import type { CheckSample, LockResult, RunSummary, StatusStore } from "./store";
 import { memoryStore } from "./stores/memory";
@@ -73,6 +73,11 @@ export type Status = {
   history(options?: { range?: HistoryRange }): Promise<HistoryPayload>;
   /** Raw samples of one service */
   serviceHistory(key: string, options?: { range?: HistoryRange }): Promise<ServiceHistory>;
+  /**
+   * Remove every configured secret (and anything shaped like a credential) from a text.
+   * Use it before logging errors that come from checks, stores or drivers.
+   */
+  redact(text: string): string;
   /** Whether a service with this key exists */
   has(key: string): boolean;
   /** Take a named lock for `ttlMs` (the store's when it has one, otherwise in-process) */
@@ -134,7 +139,7 @@ export function defineStatus(config: StatusConfig): Status {
   for (const warning of resolved.warnings) warn(warning);
 
   const secretValues = collectSecretValues(
-    [...services.values()].flatMap((service) => Object.values(service.secrets))
+    [...services.values()].flatMap((service) => [...Object.values(service.secrets), ...(service.sensitive ?? [])])
   );
 
   // Fallbacks for stores without a cache or a lock: fine for a single process
@@ -215,6 +220,7 @@ export function defineStatus(config: StatusConfig): Status {
     retentionMs,
     scoring,
     warnings: resolved.warnings,
+    redact: (text) => redactText({ text, secretValues }),
     has: (key) => services.has(key),
     lock,
     lastFullRun,

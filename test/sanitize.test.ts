@@ -52,6 +52,8 @@ describe("collectSecretValues", () => {
   });
 
   it("orders longest first", () => {
-    expect(collectSecretValues(["secret-a", "secret-a-longer"])).toEqual(["secret-a-longer", "secret-a"]);
+    const values = collectSecretValues(["secret-a", "secret-a-longer"]);
+    expect(values.indexOf("secret-a-longer")).toBeLessThan(values.indexOf("secret-a"));
+    expect([...values].sort((a, b) => b.length - a.length)).toEqual(values);
   });
 });

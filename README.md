@@ -65,7 +65,7 @@ Then trigger `status.tick()` on a schedule (see [Scheduling](docs/scheduling.md)
 |---|---|
 | How to call it | `name` |
 | What it is | the function you call, plus the fields it needs (`url`, …) |
-| Secrets it needs | `secrets: { … }`: redacted from public errors automatically |
+| Secrets it needs | `secrets: { … }`: redacted from everything public and from logs (see [Security](docs/security.md)) |
 | What to track | `track: { … }`: options of the preset |
 | Importance | `critical: true` weighs more in the score; one critical service down means "outage" |
 

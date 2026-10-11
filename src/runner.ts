@@ -1,6 +1,6 @@
 import type { ResolvedService } from "./config";
 import { combine, createHttp, errorMessage, measure, normalizeReturn } from "./probe";
-import { sanitizeError } from "./sanitize";
+import { redactText, sanitizeError } from "./sanitize";
 import type { CheckCache, CheckContext, CheckOutcome, CheckResult, SecretsInput } from "./types";
 
 /** Extra time after `timeoutMs` before a check that ignores its abort signal is given up on */
@@ -20,7 +20,7 @@ export type RunServiceOptions = {
  * - missing required secrets/fields → "unconfigured", the check is never called
  * - a throw or a timeout → down
  * - latency above `slowMs` turns "up" into "degraded"
- * - errors are sanitized before they leave the runner
+ * - errors and every other text of the result are redacted before they leave the runner
  */
 export async function runService({
   service,
@@ -34,10 +34,11 @@ export async function runService({
     return { key: service.key, status: "unconfigured", checkedAt, probed: false };
   }
 
+  const redact = (text: string) => redactText({ text, secretValues });
   const controller = new AbortController();
   const ctx: CheckContext<SecretsInput> = {
     secrets: service.secrets as Record<string, string>,
-    http: createHttp({ timeoutMs: service.timeoutMs, signal: controller.signal, fetch: fetchImpl }),
+    http: createHttp({ timeoutMs: service.timeoutMs, signal: controller.signal, fetch: fetchImpl, redact }),
     measure,
     combine,
     signal: controller.signal,
@@ -85,11 +86,29 @@ export async function runService({
     latencyMs: outcome.latencyMs,
     httpStatus: outcome.httpStatus,
     error: sanitizeError({ message: error, secretValues }),
-    metrics: outcome.metrics,
-    usage: outcome.usage?.length ? outcome.usage : undefined,
+    // Everything below is public too: no text leaves the runner without being redacted
+    metrics: outcome.metrics
+      ? Object.fromEntries(
+          Object.entries(outcome.metrics).map(([name, value]) => [
+            redact(name),
+            typeof value === "string" ? redact(value) : value,
+          ])
+        )
+      : undefined,
+    usage: outcome.usage?.length
+      ? outcome.usage.map((usage) => ({
+          ...usage,
+          label: redact(usage.label),
+          unit: usage.unit === undefined ? undefined : redact(usage.unit),
+        }))
+      : undefined,
     instances: outcome.instances?.length
       ? outcome.instances.map((instance) => ({
           ...instance,
+          key: redact(instance.key),
+          region: instance.region === undefined ? undefined : redact(instance.region),
+          id: instance.id === undefined ? undefined : redact(instance.id),
+          state: instance.state === undefined ? undefined : redact(instance.state),
           error: sanitizeError({ message: instance.error, secretValues }),
         }))
       : undefined,
