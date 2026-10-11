@@ -14,7 +14,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Publishing needs an npm token: add NPM_TOKEN to the repository secrets to turn this on
+    # Turned on by the repository variable RELEASE_ENABLED=true, with NPM_TOKEN in the secrets.
+    # A push never publishes by itself: only a version bump made by a changeset does.
     if: ${{ vars.RELEASE_ENABLED == 'true' }}
     steps:
       - uses: actions/checkout@v4
@@ -26,8 +27,9 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-      # Opens a "Version Packages" pull request while changesets are pending,
-      # and publishes to npm when that pull request is merged
+      # While changesets are pending: opens (or updates) the "Version Packages" pull request,
+      # and publishes nothing. Once that pull request is merged: publishes the new version.
+      # Any other push: `changeset publish` finds the version already on npm and does nothing.
       - uses: changesets/action@v1
         with:
           version: pnpm run version

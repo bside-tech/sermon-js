@@ -171,7 +171,7 @@
     "test": "vitest --run --typecheck",
     "test:watch": "vitest",
     "changeset": "changeset",
-    "release": "pnpm build && changeset publish",
+    "release": "node scripts/assert-versioned.mjs && pnpm build && changeset publish",
     "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "version": "changeset version"
   },
