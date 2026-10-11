@@ -21,9 +21,55 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "api": [
+        "./dist/api/index.d.cts"
+      ],
+      "fly": [
+        "./dist/fly/index.d.cts"
+      ],
+      "gcp": [
+        "./dist/gcp/index.d.cts"
+      ],
+      "aws": [
+        "./dist/aws/index.d.cts"
+      ],
+      "providers": [
+        "./dist/providers/index.d.cts"
+      ],
+      "node": [
+        "./dist/node/index.d.cts"
+      ],
+      "stores/upstash": [
+        "./dist/stores/upstash.d.cts"
+      ],
+      "stores/redis": [
+        "./dist/stores/redis.d.cts"
+      ],
+      "stores/sql": [
+        "./dist/stores/sql.d.cts"
+      ],
+      "stores/mongodb": [
+        "./dist/stores/mongodb.d.cts"
+      ],
+      "react": [
+        "./dist/react/index.d.cts"
+      ],
+      "react/heroui": [
+        "./dist/react/heroui/index.d.cts"
+      ],
+      "testing": [
+        "./dist/testing/index.d.cts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "import": {
@@ -177,7 +223,8 @@
     "test:watch": "vitest",
     "changeset": "changeset",
     "release": "pnpm build && changeset publish",
-    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "version": "changeset version"
   },
   "keywords": [
     "status-page",
