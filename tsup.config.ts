@@ -12,6 +12,8 @@ export default defineConfig({
     "node/index": "src/node/index.ts",
     "stores/upstash": "src/stores/upstash.ts",
     "stores/redis": "src/stores/redis.ts",
+    "stores/sql": "src/stores/sql.ts",
+    "stores/mongodb": "src/stores/mongodb.ts",
     "testing/index": "src/testing/index.ts",
   },
   format: ["esm", "cjs"],

@@ -6,9 +6,9 @@ Describe the services you depend on, and get checks, scoring, history and an HTT
 runs anywhere: Node, Bun, Deno, Vercel, Netlify, Cloudflare Workers. No hosting assumptions,
 no required database.
 
-> **Status: early.** The core, the HTTP API, scheduling, the memory/Redis stores and the
-> presets (Fly, GCP, AWS, 20 providers) are done and tested. SQL/MongoDB stores and the React
-> UI kit are on the way. See [Roadmap](#roadmap).
+> **Status: early.** The core, the HTTP API, scheduling, the stores (memory, Redis, SQL,
+> MongoDB) and the presets (Fly, GCP, AWS, 20 providers) are done and tested. The React UI kit
+> is on the way. See [Roadmap](#roadmap).
 
 ```bash
 npm install sermon-js
@@ -201,14 +201,16 @@ defineStatus({ store: upstashStore({ url, token }), services });
 defineStatus({ store: redisStore({ client: new Redis(url) }), services });   // ioredis or node-redis
 ```
 
-Anything else (Postgres, MySQL, SQLite, MongoDB…) is a small interface to implement:
-see [`StatusStore`](src/store.ts), and verify yours with the conformance suite:
-
 ```ts
-import { describe, expect, it } from "vitest";
-import { runStoreConformance } from "sermon-js/testing";
-runStoreConformance("my store", () => myStore(), { describe, it, expect });
+import { sqlStore } from "sermon-js/stores/sql";           // Postgres, MySQL/MariaDB, SQLite: your driver
+import { mongoStore } from "sermon-js/stores/mongodb";
+
+defineStatus({ store: sqlStore({ dialect: "postgres", query: async (sql, params) => (await pool.query(sql, params)).rows }), services });
+defineStatus({ store: mongoStore({ db: client.db("status") }), services });
 ```
+
+Anything else is a small interface to implement and a conformance suite to check it with.
+See [Stores](docs/stores.md).
 
 ## Roadmap
 
@@ -217,7 +219,7 @@ runStoreConformance("my store", () => myStore(), { describe, it, expect });
 - [x] HTTP API handler, Node adapter
 - [x] Stores: memory, Upstash REST, any Redis client
 - [x] Presets: Fly apps (sleep-safe, per region), GCP instances, AWS/S3, Statuspage, Pusher, AI/translation/video/email providers, MongoDB, Redis
-- [ ] Stores: SQL (Postgres, MySQL, SQLite), MongoDB
+- [x] Stores: SQL (Postgres, MySQL/MariaDB, SQLite), MongoDB
 - [ ] React UI kit (headless hooks + HeroUI components)
 
 ## License
