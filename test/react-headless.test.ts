@@ -8,13 +8,14 @@ import {
   formatPct,
   humanize,
   isStale,
+  mergeBars,
   RateLimitError,
   sectionsOf,
   servicesOf,
   sortServices,
   statusOf,
 } from "../src/react";
-import type { ServiceSnapshot, SnapshotNode, Status } from "../src";
+import type { HistoryBar, ServiceSnapshot, SnapshotNode, Status } from "../src";
 
 const service = (name: string, status?: Status, extra: Partial<ServiceSnapshot> = {}): ServiceSnapshot => ({
   type: "service",
@@ -106,6 +107,42 @@ describe("isStale", () => {
     expect(isStale({ lastRunAt: null, intervalMs }, 1_000_000)).toBe(false);
     expect(isStale({ lastRunAt: 1_000_000 - 500_000, intervalMs }, 1_000_000)).toBe(false);
     expect(isStale({ lastRunAt: 1_000_000 - 700_000, intervalMs }, 1_000_000)).toBe(true);
+  });
+});
+
+describe("mergeBars", () => {
+  const bar = (start: number, score: number | null, failing: HistoryBar["failing"] = {}): HistoryBar => ({
+    start,
+    score,
+    label: score === null ? "unknown" : score >= 98 ? "operational" : score >= 85 ? "degraded" : "outage",
+    runs: score === null ? 0 : 1,
+    failing,
+  });
+
+  it("leaves bars alone when they fit", () => {
+    const bars = [bar(0, 100), bar(1, 90)];
+    expect(mergeBars(bars, 10)).toEqual({ bars, factor: 1 });
+    expect(mergeBars(bars, Infinity).factor).toBe(1);
+  });
+
+  it("merges neighbours, keeping the worst score, label and failures", () => {
+    const bars = [bar(0, null), bar(1, 100), bar(2, 70, { api: "degraded" }), bar(3, 90, { api: "down", web: "degraded" }), bar(4, 100)];
+    const merged = mergeBars(bars, 3);
+    expect(merged.factor).toBe(2);
+    // Grouped from the end: [0] [1,2] [3,4]
+    expect(merged.bars).toEqual([
+      { start: 0, score: null, label: "unknown", runs: 0, failing: {} },
+      { start: 1, score: 70, label: "outage", runs: 2, failing: { api: "degraded" } },
+      { start: 3, score: 90, label: "degraded", runs: 2, failing: { api: "down", web: "degraded" } },
+    ]);
+  });
+
+  it("fits 288 bars into a phone-width chart", () => {
+    const bars = Array.from({ length: 288 }, (_, i) => bar(i, 100));
+    const merged = mergeBars(bars, 100);
+    expect(merged.factor).toBe(3);
+    expect(merged.bars).toHaveLength(96);
+    expect(merged.bars.at(-1)).toMatchObject({ start: 285, runs: 3 });
   });
 });
 

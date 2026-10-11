@@ -3,7 +3,7 @@ export type { StatusClient } from "./client";
 
 export { StatusProvider, useHistory, useRunChecks, useStatus, useStatusClient } from "./hooks";
 
-export { buildLayout, flattenServices, isStale, sectionsOf, servicesOf, sortServices, statusOf } from "./tree";
+export { buildLayout, flattenServices, isStale, mergeBars, sectionsOf, servicesOf, sortServices, statusOf } from "./tree";
 export type { LayoutBlock, Section } from "./tree";
 
 export { currentAnchor, focusAnchor, FOCUS_EVENT, groupAnchor, serviceAnchor } from "./anchors";

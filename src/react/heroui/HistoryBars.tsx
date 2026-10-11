@@ -1,9 +1,13 @@
 import { Chip, Tabs } from "@heroui/react";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { HistoryBar, HistoryRange } from "../../types";
 import { formatDateTime, formatDuration, LABEL_TEXT, LABEL_TONE } from "../format";
 import { useHistory } from "../hooks";
+import { mergeBars } from "../tree";
 import { TONE_BG, TONE_TEXT } from "./tones";
+
+/** Minimum room for one bar and its gap */
+const MIN_BAR_PX = 3;
 
 function average(bars: HistoryBar[]) {
   const scored = bars.filter((bar) => bar.score !== null);
@@ -19,8 +23,25 @@ export function HistoryBars({ names = {} }: { /** Service names by key, to label
   const [range, setRange] = useState<HistoryRange>("24h");
   const [hovered, setHovered] = useState<number | null>(null);
   const history = useHistory(range);
-  const bars = history.data?.bars ?? [];
-  const active = hovered !== null ? bars[hovered] : bars.findLast((bar) => bar.runs > 0);
+
+  // On narrow screens there isn't a few pixels per bar: merge neighbours until there is
+  const chart = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const element = chart.current;
+    if (!element) return;
+    const measure = () => setWidth(element.clientWidth);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const { bars, factor } = useMemo(
+    () => mergeBars(history.data?.bars ?? [], width ? Math.floor(width / MIN_BAR_PX) : Infinity),
+    [history.data, width]
+  );
+  const active = (hovered !== null && bars[hovered]) || bars.findLast((bar) => bar.runs > 0);
   const avg = average(bars);
 
   return (
@@ -29,7 +50,7 @@ export function HistoryBars({ names = {} }: { /** Service names by key, to label
         <div>
           <h3 className="text-sm font-medium">System score history</h3>
           <p className="text-xs text-muted">
-            {history.data ? `Worst score per ${formatDuration(history.data.bucketMs)}` : "Loading…"}
+            {history.data ? `Worst score per ${formatDuration(history.data.bucketMs * factor)}` : "Loading…"}
             {avg !== null && ` · average ${avg}`}
           </p>
         </div>
@@ -50,6 +71,7 @@ export function HistoryBars({ names = {} }: { /** Service names by key, to label
       </div>
 
       <div
+        ref={chart}
         className="flex h-24 items-end gap-px"
         onMouseLeave={() => setHovered(null)}
         role="img"

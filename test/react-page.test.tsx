@@ -195,6 +195,24 @@ describe("<StatusPage>", () => {
     expect(localStorage.getItem("sermon:section:our-services")).toBe("collapsed");
   });
 
+  it("opens the right section when the URL hash points at a service", async () => {
+    await setup();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Our services" }));
+    await screen.findByRole("button", { name: "Expand Our services" });
+
+    // A link that only changes the hash on the open page (or back/forward)
+    history.replaceState(null, "", "#service-our-services%3Aapi");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    await screen.findByRole("button", { name: "Collapse Our services" });
+
+    // And the side index does the same
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Our services" }));
+    await screen.findByRole("button", { name: "Expand Our services" });
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Tracked services" })).getByRole("link", { name: "Edge: Asleep (expected)" }));
+    await screen.findByRole("button", { name: "Collapse Our services" });
+    expect(decodeURIComponent(location.hash)).toBe("#service-our-services:regions:edge");
+  });
+
   it("starts collapsed by default", async () => {
     localStorage.clear();
     const status = defineStatus({ services: [group({ title: "G", services: [custom({ name: "A", check: () => true })] })] });

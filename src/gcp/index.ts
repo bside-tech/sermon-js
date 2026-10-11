@@ -2,7 +2,7 @@ import { definePreset, type PresetOptions } from "../config";
 import { googleServiceAccountToken, parseServiceAccount } from "../google-auth";
 import type { CheckOutcome } from "../types";
 
-export { googleServiceAccountToken, parseServiceAccount, signGoogleAssertion } from "../google-auth";
+export { clearGoogleTokens, googleServiceAccountToken, parseServiceAccount, signGoogleAssertion } from "../google-auth";
 export type { GoogleServiceAccount } from "../google-auth";
 
 export type GcpInstanceOptions = PresetOptions & {
@@ -45,7 +45,7 @@ const instance = definePreset<GcpInstanceOptions>()({
     identity: `gcp.instance:${options.project ?? ""}/${options.zone ?? ""}/${options.instance ?? ""}`,
     description: `Google Cloud VM "${options.instance}": status, then health only when running`,
   }),
-  check: async ({ options, secrets, http, cache, now }): Promise<CheckOutcome> => {
+  check: async ({ options, secrets, http, now }): Promise<CheckOutcome> => {
     const account = parseServiceAccount(secrets.serviceAccount);
     const project = options.project ?? account?.project_id;
     if (!account || !project) {
@@ -58,7 +58,6 @@ const instance = definePreset<GcpInstanceOptions>()({
         account,
         scope: "https://www.googleapis.com/auth/compute.readonly",
         http,
-        cache,
         now,
       });
     } catch (error) {

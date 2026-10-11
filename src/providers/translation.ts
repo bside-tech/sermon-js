@@ -89,7 +89,7 @@ export const googleTranslate = definePreset<GoogleTranslateOptions>()({
     identity: "google.translate",
     description: "Lists supported languages with Cloud Translation v3",
   }),
-  check: async ({ options, secrets, http, cache, now }): Promise<CheckOutcome> => {
+  check: async ({ options, secrets, http, now }): Promise<CheckOutcome> => {
     const account = parseServiceAccount(secrets.serviceAccount);
     if (!account?.project_id) {
       return { status: "down", probed: false, error: "The service account secret is not a service-account JSON key" };
@@ -98,7 +98,6 @@ export const googleTranslate = definePreset<GoogleTranslateOptions>()({
       account,
       scope: "https://www.googleapis.com/auth/cloud-translation",
       http,
-      cache,
       now,
     });
     return call(

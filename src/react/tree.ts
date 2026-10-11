@@ -1,4 +1,4 @@
-import type { ServiceSnapshot, SnapshotNode, Status, StatusSnapshot } from "../types";
+import type { HistoryBar, ScoreLabel, ServiceSnapshot, SnapshotNode, Status, StatusSnapshot } from "../types";
 
 const STATUS_ORDER: Record<Status, number> = { down: 0, degraded: 1, up: 2, sleeping: 3, unconfigured: 4 };
 
@@ -111,4 +111,32 @@ export function sectionsOf(blocks: LayoutBlock[]): Section[] {
 /** True when the last full run is older than twice the interval: the scheduler probably stopped */
 export function isStale(snapshot: Pick<StatusSnapshot, "lastRunAt" | "intervalMs">, now = Date.now()): boolean {
   return snapshot.lastRunAt !== null && now - snapshot.lastRunAt > 2 * snapshot.intervalMs;
+}
+
+const LABEL_SEVERITY: Record<ScoreLabel, number> = { unknown: 0, operational: 1, degraded: 2, outage: 3 };
+
+/**
+ * Fit history bars into a narrow space by merging neighbours: each merged bar keeps the
+ * worst score and label of its group, the sum of runs and every failure ("down" wins).
+ * Returns the bars and how many original bars each one now covers.
+ */
+export function mergeBars(bars: HistoryBar[], maxBars: number): { bars: HistoryBar[]; factor: number } {
+  if (maxBars < 1 || bars.length <= maxBars) return { bars, factor: 1 };
+  const factor = Math.ceil(bars.length / maxBars);
+  const merged: HistoryBar[] = [];
+  // Group from the end, so the newest bar is always a full group ending "now"
+  for (let end = bars.length; end > 0; end -= factor) {
+    const group = bars.slice(Math.max(0, end - factor), end);
+    const combined: HistoryBar = { start: group[0]!.start, score: null, label: "unknown", runs: 0, failing: {} };
+    for (const bar of group) {
+      combined.runs += bar.runs;
+      if (bar.score !== null && (combined.score === null || bar.score < combined.score)) combined.score = bar.score;
+      if (LABEL_SEVERITY[bar.label] > LABEL_SEVERITY[combined.label]) combined.label = bar.label;
+      for (const [key, status] of Object.entries(bar.failing)) {
+        if (combined.failing[key] !== "down") combined.failing[key] = status;
+      }
+    }
+    merged.unshift(combined);
+  }
+  return { bars: merged, factor };
 }

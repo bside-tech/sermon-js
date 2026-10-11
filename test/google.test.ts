@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { gcp, googleServiceAccountToken, parseServiceAccount, signGoogleAssertion } from "../src/gcp";
+import { beforeEach, describe, expect, it } from "vitest";
+import { clearGoogleTokens, gcp, googleServiceAccountToken, parseServiceAccount, signGoogleAssertion } from "../src/gcp";
 import { createHttp } from "../src/probe";
 import { googleTranslate } from "../src/providers";
 import { mockFetch, runCheck, type MockRoute } from "../src/testing";
 import { decodeJwt, makeServiceAccount } from "./helpers/google-key";
+
+beforeEach(() => clearGoogleTokens());
 
 const tokenRoute: MockRoute = { url: "oauth2.googleapis.com/token", body: { access_token: "ya29.token-abc", expires_in: 3600 } };
 
@@ -29,21 +31,37 @@ describe("Google service-account auth", () => {
     expect(await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, jwt.signature, jwt.signed)).toBe(true);
   });
 
-  it("exchanges the assertion for a token and caches it", async () => {
+  it("exchanges the assertion for a token and keeps it in memory until it nears expiry", async () => {
     const { account } = await makeServiceAccount();
     const fetch = mockFetch([tokenRoute]);
     const http = createHttp({ timeoutMs: 1000, fetch });
-    const store = new Map<string, string>();
-    const cache = { get: async (k: string) => store.get(k) ?? null, set: async (k: string, v: string) => void store.set(k, v) };
+    const now = Date.UTC(2026, 9, 9, 12, 0);
 
-    expect(await googleServiceAccountToken({ account, scope: "s", http, cache })).toBe("ya29.token-abc");
-    expect(await googleServiceAccountToken({ account, scope: "s", http, cache })).toBe("ya29.token-abc");
+    expect(await googleServiceAccountToken({ account, scope: "s", http, now })).toBe("ya29.token-abc");
+    expect(await googleServiceAccountToken({ account, scope: "s", http, now: now + 50 * 60_000 })).toBe("ya29.token-abc");
     expect(fetch.calls).toHaveLength(1);
     expect(fetch.calls[0]).toMatchObject({ method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" } });
     expect(fetch.calls[0]?.body).toContain("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=");
     // A different scope is a different token
-    await googleServiceAccountToken({ account, scope: "other", http, cache });
+    await googleServiceAccountToken({ account, scope: "other", http, now });
     expect(fetch.calls).toHaveLength(2);
+    // Past its lifetime (minus a margin), a new token is requested
+    await googleServiceAccountToken({ account, scope: "s", http, now: now + 56 * 60_000 });
+    expect(fetch.calls).toHaveLength(3);
+    // A rotated key of the same account doesn't reuse the old key's token
+    const rotated = { ...account, private_key: (await makeServiceAccount()).account.private_key };
+    await googleServiceAccountToken({ account: rotated, scope: "s", http, now });
+    expect(fetch.calls).toHaveLength(4);
+  });
+
+  it("never writes tokens to the store's cache", async () => {
+    const { json } = await makeServiceAccount();
+    const cache = new Map<string, string>();
+    await runCheck(googleTranslate({ secrets: { serviceAccount: json } }), {
+      fetch: mockFetch([tokenRoute, { url: "/supportedLanguages", body: { languages: [] } }]),
+      cache,
+    });
+    expect([...cache.keys()]).toEqual([]);
   });
 
   it("explains a rejected key", async () => {

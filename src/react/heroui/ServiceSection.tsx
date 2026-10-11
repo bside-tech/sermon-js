@@ -110,13 +110,13 @@ export function ServiceSection({
     <Card id={groupAnchor(section.key)} className="scroll-mt-6">
       <Disclosure isExpanded={expanded} onExpandedChange={setExpanded}>
         {/* The circles have their own tooltips, so they sit beside the trigger, not inside it */}
-        <Disclosure.Heading className="flex items-start gap-3">
-          <Disclosure.Trigger className="flex min-w-0 flex-1 cursor-pointer flex-col text-left">
+        <Disclosure.Heading className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <Disclosure.Trigger className="flex min-w-48 flex-1 cursor-pointer flex-col text-left">
             <span className="font-medium leading-snug">{section.title}</span>
             {section.description && <span className="text-sm leading-snug text-muted">{section.description}</span>}
           </Disclosure.Trigger>
           {/* Circles and chevron share one row so they stay vertically centered together */}
-          <div className="-mt-1 flex max-w-[50%] items-center gap-3">
+          <div className="-mt-1 ml-auto flex max-w-full items-center gap-3 sm:max-w-[50%]">
             <ServiceDots services={services} />
             <Button
               isIconOnly

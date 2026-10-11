@@ -73,11 +73,21 @@ function Page({
     focusAnchor(anchor, { smooth: false });
   }, [snapshot]);
 
+  // The hash can also change on an open page: back/forward, or a link that only changes it
+  useEffect(() => {
+    const onHashChange = () => {
+      const anchor = currentAnchor();
+      if (anchor) focusAnchor(anchor);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
   return (
     // On wide screens the service index is attached to the right of the main column
     <div className="mx-auto flex min-h-screen max-w-5xl gap-6 px-4 py-8 sm:px-6 xl:max-w-[calc(64rem+12rem+1.5rem)]">
       <main className="flex min-w-0 flex-1 flex-col gap-6">
-        <header className="flex items-center justify-between gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           {brand ?? <h1 className="text-lg font-semibold">Status</h1>}
           {snapshot && allowRuns && <RunAllButton />}
         </header>

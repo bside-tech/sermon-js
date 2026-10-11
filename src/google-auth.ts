@@ -1,4 +1,4 @@
-import type { CheckCache, ProbeHelpers } from "./types";
+import type { ProbeHelpers } from "./types";
 
 export type GoogleServiceAccount = { client_email: string; private_key: string; project_id?: string };
 
@@ -60,27 +60,35 @@ export async function signGoogleAssertion({
   return `${unsigned}.${base64url(new Uint8Array(signature))}`;
 }
 
+// Tokens live in memory only: they are credentials, so they are never written to the store.
+// Each process (or serverless instance) signs in once and reuses its token until it expires.
+const tokens = new Map<string, { token: string; expiresAt: number }>();
+
+/** Forget cached tokens (for tests) */
+export function clearGoogleTokens() {
+  tokens.clear();
+}
+
 /**
  * An OAuth access token for a Google service account, without any Google library: it only
- * needs `fetch` and Web Crypto, so it works on edge runtimes. Tokens are cached until
+ * needs `fetch` and Web Crypto, so it works on edge runtimes. Tokens are kept in memory until
  * shortly before they expire.
  */
 export async function googleServiceAccountToken({
   account,
   scope,
   http,
-  cache,
   now = Date.now(),
 }: {
   account: GoogleServiceAccount;
   scope: string;
   http: ProbeHelpers["http"];
-  cache?: CheckCache;
   now?: number;
 }): Promise<string> {
-  const cacheKey = `google-token:${account.client_email}:${scope}`;
-  const cached = await cache?.get(cacheKey);
-  if (cached) return cached;
+  // The tail of the key tells apart two keys of the same account (after a rotation)
+  const cacheKey = `${account.client_email}:${scope}:${account.private_key.length}:${account.private_key.slice(-48)}`;
+  const cached = tokens.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.token;
 
   const assertion = await signGoogleAssertion({ account, scope, now });
   const response = await http("https://oauth2.googleapis.com/token", {
@@ -99,6 +107,6 @@ export async function googleServiceAccountToken({
   }
   // Keep a margin so a token never expires mid-check
   const ttlMs = Math.max(60_000, ((body.expires_in ?? 3600) - 300) * 1000);
-  await cache?.set(cacheKey, body.access_token, ttlMs);
+  tokens.set(cacheKey, { token: body.access_token, expiresAt: now + ttlMs });
   return body.access_token;
 }
