@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -9,7 +9,7 @@ import { StatusPage } from "../src/react/heroui";
 import { mockFetch } from "../src/testing";
 
 beforeAll(() => {
-  // jsdom lacks a few browser APIs the components (and HeroUI) touch
+  // The simulated browser lacks a few APIs the components (and HeroUI) touch
   class Observer {
     observe() {}
     unobserve() {}
