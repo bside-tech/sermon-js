@@ -1,6 +1,6 @@
 {
   "name": "sermon-js",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Service monitor: build status pages fast. Typed checks and presets, sleep-safe probes, scoring, history, a host-agnostic API and a React UI kit.",
   "license": "MIT",
   "author": "BSide-Tech",
