@@ -4,10 +4,22 @@ import type { HistoryBar, HistoryRange, InstanceStats, ScoreLabel, ServiceStats,
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** How far each range looks back, and its smallest bucket */
 export const RANGES: Record<HistoryRange, { durationMs: number; bucketMs: number }> = {
   "24h": { durationMs: DAY_MS, bucketMs: 5 * 60 * 1000 },
   "7d": { durationMs: 7 * DAY_MS, bucketMs: 60 * 60 * 1000 },
 };
+
+/**
+ * The width of one history bar: the check interval, so every bar holds one scheduled run
+ * (a 15-minute interval gives 15-minute bars), and never less than the range's smallest
+ * bucket, nor more than the range itself.
+ */
+export function bucketFor(range: HistoryRange, intervalMs?: number): number {
+  const { durationMs, bucketMs } = RANGES[range];
+  if (!intervalMs || !Number.isFinite(intervalMs)) return bucketMs;
+  return Math.min(durationMs, Math.max(bucketMs, Math.round(intervalMs)));
+}
 
 function percentile(sorted: number[], p: number): number | null {
   if (!sorted.length) return null;
@@ -92,15 +104,19 @@ export function bucketRuns({
   range,
   now = Date.now(),
   scoring,
+  bucketMs = RANGES[range].bucketMs,
 }: {
   runs: RunSummary[];
   range: HistoryRange;
   now?: number;
   scoring?: Scoring;
+  /** Width of one bar (default: the range's smallest bucket). See `bucketFor`. */
+  bucketMs?: number;
 }): HistoryBar[] {
-  const { durationMs, bucketMs } = RANGES[range];
+  const { durationMs } = RANGES[range];
   const end = Math.floor(now / bucketMs) * bucketMs + bucketMs;
-  const count = Math.round(durationMs / bucketMs);
+  // An interval that doesn't divide the range still covers all of it
+  const count = Math.ceil(durationMs / bucketMs);
   const start = end - count * bucketMs;
 
   const bars: HistoryBar[] = Array.from({ length: count }, (_, i) => ({

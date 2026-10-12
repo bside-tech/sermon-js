@@ -26,7 +26,7 @@ export type { CheckSample, LockResult, RunSummary, StatusStore, TimeRange } from
 export { computeScore, labelForScore, DEFAULT_SCORING } from "./score";
 export type { Scoring, ScoringInput } from "./score";
 
-export { bucketRuns, computeServiceStats, RANGES } from "./history";
+export { bucketFor, bucketRuns, computeServiceStats, RANGES } from "./history";
 export { collectSecretValues, sanitizeError } from "./sanitize";
 export { combine, createHttp, errorMessage, measure } from "./probe";
 export { toMs } from "./duration";

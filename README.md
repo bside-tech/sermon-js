@@ -159,7 +159,7 @@ await status.tick();                      // run everything, only if due (idempo
 await status.run();                       // run everything now
 await status.run({ keys: ["queue-depth"] });
 await status.snapshot();                  // tree + latest results + statistics + score
-await status.history({ range: "24h" });   // score history in buckets ("24h" | "7d")
+await status.history({ range: "24h" });   // score history, one bar per interval ("24h" | "7d")
 await status.serviceHistory("queue-depth");
 ```
 

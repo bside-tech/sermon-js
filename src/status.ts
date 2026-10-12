@@ -1,6 +1,6 @@
 import { resolveTree, type ResolvedNode, type ResolvedService, type ServiceNode } from "./config";
 import { toMs, type Duration } from "./duration";
-import { bucketRuns, computeServiceStats, RANGES } from "./history";
+import { bucketFor, bucketRuns, computeServiceStats, RANGES } from "./history";
 import { runServices } from "./runner";
 import { collectSecretValues, redactText } from "./sanitize";
 import { computeScore, resolveScoring, type Scoring, type ScoringInput } from "./score";
@@ -351,11 +351,13 @@ export function defineStatus(config: StatusConfig): Status {
     async history({ range = "24h" } = {}) {
       const at = now();
       const runs = await store.runs({ since: at - RANGES[range].durationMs, until: at });
+      // One bar per scheduled run: bars as wide as the interval
+      const bucketMs = bucketFor(range, intervalMs);
       return {
         schemaVersion: 1,
         range,
-        bucketMs: RANGES[range].bucketMs,
-        bars: bucketRuns({ runs, range, now: at, scoring }),
+        bucketMs,
+        bars: bucketRuns({ runs, range, now: at, scoring, bucketMs }),
       };
     },
 

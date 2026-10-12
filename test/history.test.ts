@@ -1,8 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { bucketRuns, computeServiceStats } from "../src/history";
+import { bucketFor, bucketRuns, computeServiceStats } from "../src/history";
 import type { CheckSample, RunSummary } from "../src/store";
 
 const now = Date.UTC(2026, 9, 9, 12, 2);
+
+describe("bucketFor", () => {
+  const MIN = 60_000;
+
+  it("makes bars as wide as the check interval", () => {
+    expect(bucketFor("24h", 5 * MIN)).toBe(5 * MIN);
+    expect(bucketFor("24h", 10 * MIN)).toBe(10 * MIN);
+    expect(bucketFor("24h", 15 * MIN)).toBe(15 * MIN);
+    expect(bucketFor("7d", 2 * 60 * MIN)).toBe(2 * 60 * MIN);
+  });
+
+  it("never goes below the range's smallest bucket, nor above the range", () => {
+    expect(bucketFor("24h", MIN)).toBe(5 * MIN);
+    expect(bucketFor("7d", 15 * MIN)).toBe(60 * MIN);
+    expect(bucketFor("24h", 48 * 60 * MIN)).toBe(24 * 60 * MIN);
+    expect(bucketFor("24h")).toBe(5 * MIN);
+  });
+
+  it("gives one bar per scheduled run", () => {
+    const now = Date.UTC(2026, 0, 2, 12, 0, 0);
+    const bucketMs = bucketFor("24h", 15 * MIN);
+    const runs = Array.from({ length: 96 }, (_, i) => ({
+      at: now - i * 15 * MIN,
+      trigger: "scheduled" as const,
+      full: true,
+      score: 100,
+      label: "operational" as const,
+      failing: {},
+    }));
+    const bars = bucketRuns({ runs, range: "24h", now, bucketMs });
+    expect(bars).toHaveLength(96);
+    expect(bars.every((bar) => bar.runs === 1)).toBe(true);
+  });
+
+  it("covers the whole range when the interval doesn't divide it", () => {
+    expect(bucketRuns({ runs: [], range: "24h", now: 0, bucketMs: 7 * MIN })).toHaveLength(206);
+  });
+});
 
 describe("bucketRuns", () => {
   const run = (minutesAgo: number, score: number, failing: RunSummary["failing"] = {}): RunSummary => ({
