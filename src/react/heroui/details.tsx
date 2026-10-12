@@ -96,8 +96,11 @@ export function InstanceTable({
   instances,
   stats,
   regionNames = FLY_REGIONS,
+  labels,
 }: {
   instances: Instance[];
+  /** Headings of the first two columns (default "Region" and "Machine") */
+  labels?: { key: string; detail?: string };
   stats?: ServiceStats["instances"];
   regionNames?: Record<string, string>;
 }) {
@@ -106,8 +109,8 @@ export function InstanceTable({
       <table className="w-full min-w-[34rem] text-xs">
         <thead>
           <tr className="text-left text-[10px] uppercase tracking-wide text-muted">
-            <th className="py-1 pr-3 font-normal">Region</th>
-            <th className="py-1 pr-3 font-normal">Machine</th>
+            <th className="py-1 pr-3 font-normal">{labels?.key ?? "Region"}</th>
+            <th className="py-1 pr-3 font-normal">{labels ? (labels.detail ?? "") : "Machine"}</th>
             <th className="py-1 pr-3 font-normal">Status</th>
             <th className="py-1 pr-3 text-right font-normal">Response</th>
             <th className="py-1 pr-3 text-right font-normal">p50 24h</th>

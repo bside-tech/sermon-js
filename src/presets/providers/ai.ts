@@ -1,6 +1,6 @@
 import { definePreset, type PresetOptions } from "../../config";
-import type { CheckOutcome } from "../../types";
-import { bearer, call, quota, round } from "./shared";
+import type { CheckOutcome, Instance } from "../../types";
+import { bearer, call, quota, round, summarize } from "./shared";
 
 type ApiKey = { secrets: { apiKey: string | undefined } };
 
@@ -115,15 +115,59 @@ export const openai = definePreset<OpenAIOptions>()({
     ),
 });
 
-/** Anthropic. Lists models (limit 1). up when the key works; down when rejected. */
-export const anthropic = definePreset<PresetOptions & ApiKey>()({
+export type AnthropicOptions = PresetOptions &
+  ApiKey & {
+    track?: {
+    /**
+     * The models you depend on (IDs or aliases, e.g. "claude-sonnet-4-6"). Each one is
+     * reported on its own row. Without a list, only the key is validated.
+     */
+    models?: string[];
+  };
+};
+
+const API = "https://api.anthropic.com/v1/models";
+
+/**
+ * Anthropic. Reads each model in `track.models` (free, no tokens), or lists models when
+ * there is no list.
+ * - up: the key works and every listed model is available to it
+ * - degraded: some models are missing or retired, or the API is rate limited or overloaded
+ * - down: the API rejects the key, errors, or none of the listed models is available
+ *
+ * Reports one `instances` row per model, so each keeps its own uptime and response time.
+ * It proves a model exists for this key; it can't see capacity problems on real requests.
+ */
+export const anthropic = definePreset<AnthropicOptions>()({
   kind: "anthropic",
   requiredSecrets: ["apiKey"],
-  derive: () => ({ name: "Anthropic", identity: "anthropic", description: "Lists models" }),
-  check: ({ secrets, http }) =>
-    call(http, "https://api.anthropic.com/v1/models?limit=1", {
-      headers: { "x-api-key": secrets.apiKey, "anthropic-version": "2023-06-01" },
-    }),
+  derive: (options) => ({
+    name: "Anthropic",
+    identity: "anthropic",
+    description: options.track?.models?.length ? "Reads each monitored model" : "Lists models",
+  }),
+  check: async ({ options, secrets, http }): Promise<CheckOutcome> => {
+    const headers = { "x-api-key": secrets.apiKey, "anthropic-version": "2023-06-01" };
+    const models = [...new Set(options.track?.models ?? [])];
+    if (models.length === 0) return (await http(`${API}?limit=1`, { headers })).outcome;
+
+    const responses = await Promise.all(
+      models.map(async (model) => ({ model, res: await http(`${API}/${encodeURIComponent(model)}`, { headers }) }))
+    );
+    // A rejected key fails every model the same way: report it once, as the key's problem
+    const rejected = responses.find(({ res }) => res.status === 401 || res.status === 403);
+    if (rejected) return rejected.res.outcome;
+
+    const instances = responses.map(({ model, res }): Instance => {
+      const base = { key: model, latencyMs: res.status === undefined ? undefined : res.latencyMs, httpStatus: res.status };
+      if (res.ok) return { ...base, status: "up" };
+      if (res.status === 404) return { ...base, status: "down", error: "Model not found: retired, or not available to this key" };
+      // 529: Anthropic is overloaded, which passes
+      if (res.status === 529) return { ...base, status: "degraded", error: "Overloaded" };
+      return { ...base, status: res.outcome.status, error: res.outcome.error };
+    });
+    return { ...summarize(instances, "model"), instances, instanceLabels: { key: "Model" } };
+  },
 });
 
 /** Google Gemini. Lists models (page size 1). */

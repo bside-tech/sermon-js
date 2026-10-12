@@ -115,6 +115,12 @@ export async function runService({
           error: sanitizeError({ message: instance.error, secretValues }),
         }))
       : undefined,
+    instanceLabels: outcome.instanceLabels
+      ? {
+          key: redact(outcome.instanceLabels.key),
+          detail: outcome.instanceLabels.detail === undefined ? undefined : redact(outcome.instanceLabels.detail),
+        }
+      : undefined,
   };
 }
 

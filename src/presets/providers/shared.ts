@@ -1,5 +1,5 @@
 import { normalizeReturn } from "../../probe";
-import type { CheckOutcome, CheckReturn, HttpInit, HttpResult, ProbeHelpers } from "../../types";
+import type { CheckOutcome, CheckReturn, HttpInit, HttpResult, Instance, ProbeHelpers } from "../../types";
 
 export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -54,3 +54,43 @@ export function quota({
     usage: [{ label, used, limit, unit, resetsAt }],
   };
 }
+
+/**
+ * The status of a service made of instances (models, endpoints…), with the same rule as
+ * `fly.app`: all failing is down, some failing or degraded is degraded, all resting is sleeping.
+ */
+export function summarize(instances: Instance[], noun: string): Pick<CheckOutcome, "status" | "error" | "latencyMs"> {
+  const down = instances.filter((instance) => instance.status === "down");
+  const degraded = instances.filter((instance) => instance.status === "degraded");
+  const awake = instances.filter((instance) => instance.status === "up" || instance.status === "degraded");
+  const keysOf = (items: Instance[]) => items.map((instance) => instance.key).join(", ");
+  const latencies = instances.map((instance) => instance.latencyMs).filter((l): l is number => l !== undefined);
+  const latencyMs = latencies.length ? Math.max(...latencies) : undefined;
+
+  if (instances.length > 0 && down.length === instances.length) {
+    return { status: "down", latencyMs, error: `All ${instances.length} ${noun}(s) failing` };
+  }
+  if (down.length > 0) {
+    return { status: "degraded", latencyMs, error: `${down.length}/${instances.length} ${noun}(s) failing: ${keysOf(down)}` };
+  }
+  if (degraded.length > 0) return { status: "degraded", latencyMs, error: `Degraded: ${keysOf(degraded)}` };
+  return { status: awake.length || instances.length === 0 ? "up" : "sleeping", latencyMs };
+}
+
+/**
+ * For APIs with no free read call: an empty request is refused for validation, which only
+ * happens after the key was accepted. Nothing is searched, so nothing is billed.
+ */
+export function keyAccepted(res: HttpResult): CheckOutcome {
+  if (res.status === 400 || res.status === 422) return { status: "up", latencyMs: res.latencyMs, httpStatus: res.status };
+  if (res.status === 402) {
+    return { status: "degraded", latencyMs: res.latencyMs, httpStatus: 402, error: "Out of credits, or payment required" };
+  }
+  return res.outcome;
+}
+
+export const emptyPost = (headers: Record<string, string>) => ({
+  method: "POST",
+  headers: { "content-type": "application/json", ...headers },
+  body: "{}",
+});

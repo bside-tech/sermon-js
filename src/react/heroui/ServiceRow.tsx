@@ -100,7 +100,12 @@ export function ServiceRow({ service }: { service: ServiceSnapshot }) {
 
       {result?.instances && result.instances.length > 0 && (
         <div className="pl-5.5">
-          <InstanceTable instances={result.instances} stats={stats?.instances} regionNames={regionNames} />
+          <InstanceTable
+            instances={result.instances}
+            stats={stats?.instances}
+            regionNames={regionNames}
+            labels={result.instanceLabels}
+          />
         </div>
       )}
 

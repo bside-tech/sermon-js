@@ -7,7 +7,7 @@ same five concerns: `name`, its own fields, `secrets`, `track`, `critical` (plus
 They all come from one place:
 
 ```ts
-import { aws, deepgram, fly, gcp, generic, mongodb, openai, statuspage } from "sermon-js/presets";
+import { aws, deepgram, fly, gcp, generic, mongodb, neon, openai, statuspage } from "sermon-js/presets";
 ```
 
 Presets only use `fetch` and Web Crypto, and the database presets take a client you provide,
@@ -76,6 +76,32 @@ Reports `metrics.vm` and `metrics.zone`.
 |---|---|---|
 | `aws.credentials({ name, secrets: { accessKeyId, secretAccessKey } })` | STS `GetCallerIdentity` | Proves the credentials work, not that a given AWS service is healthy. For services with no cheap probe. |
 | `aws.s3Bucket({ bucket, endpoint?, region?, secrets })` | `HeadBucket` | Works with AWS S3, Tigris, Cloudflare R2, MinIO. down when missing or denied. |
+| `aws.bedrock({ region, models, secrets: { bearerToken } \| { accessKeyId, secretAccessKey } })` | `InvokeModel` with one token, per model | One `instances` row per model you list (model or inference-profile IDs). degraded when some fail or one is throttled, down when all fail. Uses a Bedrock API key when given, otherwise SigV4. |
+
+## Neon
+
+```ts
+neon.project({ projectId, secrets: { apiKey }, query: (sql) => pool.query(sql), track: { compute: { maxHours: 190 }, storage: { maxGb: 10 } } })
+```
+
+Checked **without ever waking a compute**: states come from the Neon API (control plane), and
+`query` only sends `select 1` while its compute is already active. `endpoint` names the compute
+`query` connects to (the `ep-…` part of the connection host); by default it is the read-write
+compute of the default branch.
+
+| | |
+|---|---|
+| up | The compute is active (and answers `select 1` when `query` is given) |
+| sleeping | The compute is suspended (scale to zero) |
+| degraded | A compute is starting, a usage bar is near its limit, or the Neon API can't be read |
+| down | The project doesn't exist, it has no compute, or an active compute doesn't answer |
+
+Reports one `instances` row per compute (branch, region, state), `metrics.postgres`,
+`metrics.region`, `metrics.branches`, `metrics.computes`, and `usage` bars for the allowances
+you give in `track` (the API doesn't return your plan's limits): compute in CU-hours for the
+billing period, storage as the sum of the branches' logical sizes.
+
+For a plain connection check on any PostgreSQL server, including Neon, see `postgres.ping`.
 
 ## Providers
 
@@ -85,7 +111,8 @@ down when it is rejected.
 | Preset | Calls | Extra |
 |---|---|---|
 | `deepgram({ secrets: { apiKey }, track?: { balance } })` | Projects, then balances | `metrics.balance`; degraded below `balance.warnBelow` (20) |
-| `gladia`, `anthropic`, `gemini`, `cambai` (`secrets: { apiKey }`) | List live sessions / models / languages | |
+| `gladia`, `gemini`, `cambai` (`secrets: { apiKey }`) | List live sessions / models / languages | |
+| `anthropic({ secrets: { apiKey }, track?: { models } })` | Models (limit 1), or each model in `track.models` (free) | With `models`: one `instances` row per model; degraded when some are missing or retired, or the API is overloaded; down when none is available. Only the models you list are checked |
 | `speechmatics({ secrets: { apiKey }, baseUrl? })` | Batch jobs (limit 1) | |
 | `openai({ secrets: { apiKey }, organization?, track?: { model } })` | Models, or one model | Can't see billing problems |
 | `elevenlabs({ secrets: { apiKey }, track?: { quota } })` | `/v1/user/subscription` | `usage`: credits with reset time; `metrics.tier`; degraded under `quota.warnBelowPct` (10) left. A key without the user scope still counts as up |
@@ -97,6 +124,10 @@ down when it is rejected.
 | `mux({ secrets: { tokenId, tokenSecret } })` | Live streams (limit 1) | |
 | `cloudflareStream({ accountId, secrets: { token }, track?: { storage } })` | Videos and `storage-usage`, in parallel | `usage`: storage minutes; `metrics.videos`; degraded at 90% |
 | `mailersend({ secrets: { apiKey } })` | `/v1/api-quota` | `usage`: API requests with reset time; degraded under 10% left |
+| `stripe({ secrets: { apiKey }, track?: { account, webhooks, disputes } })` | Balance, then account, webhook endpoints, undelivered events (24 h) and disputes, in parallel | See below |
+| `tavily({ secrets: { apiKey }, track?: { quota } })` | `/usage` | `usage`: credits (the key's limit, else the plan's); `metrics.plan`; degraded at `quota.warnAbovePct` (90) |
+| `exa`, `nimble` (`secrets: { apiKey }`) | An empty search, refused for validation once the key is accepted | Nothing is searched or billed. 402 (out of credits) is degraded |
+| `emelia({ secrets: { apiKey }, baseUrl? })` | An empty email-finder request, refused for validation | Nothing is looked up or billed. 402 is degraded |
 | `resend({ secrets: { apiKey } })` | Domains | `metrics.domains`, `metrics.verified`; degraded when none is verified. A sending-only key still counts as up |
 | `meilisearch({ host, index?, secrets: { apiKey } })` | `/health`, then the index (or the list of indexes), and its statistics | `metrics.documents`, `metrics.indexing`, when the key may read statistics. degraded when the index is missing |
 | `github({ secrets: { token }, track?: { repo, rateLimit } })` | `/rate_limit` (free), optionally a repo's releases | `usage`: requests this hour; down if the repo can't be read |
@@ -106,6 +137,21 @@ down when it is rejected.
 | `upstashRedis({ url, secrets: { token } })` | `PING` over REST | Upstash, Vercel KV and compatible servers |
 | `pusher({ appId, cluster?, secrets: { key, secret }, track?: { connections } })` | Channel list, then each channel's `subscription_count` | See below |
 | `statuspage({ url, name? })` | `/api/v2/status.json` | Any Atlassian Statuspage (Fly.io, Vercel, Cloudflare, GitHub…): none → up, minor → degraded, major/critical → down |
+
+### Stripe
+
+All calls are free and read-only. The balance validates the key; the rest is on by default
+and can be turned off in `track`.
+
+- degraded when a webhook endpoint is disabled (Stripe disables them after repeated failures),
+  when Stripe could not deliver events in the last 24 hours, or when a **live** account can't
+  take charges or payouts or has overdue requirements. Test-mode accounts are not held to the
+  account rules.
+- Reports `metrics.mode` (live/test), `metrics.available`, `metrics.pending`,
+  `metrics.webhookEndpoints`, `metrics.undelivered24h`, `metrics.openDisputes`, and one
+  `instances` row per webhook endpoint.
+- A restricted key needs read access to what you track. What it may not read is left out,
+  never counted as a failure.
 
 ### Pusher
 

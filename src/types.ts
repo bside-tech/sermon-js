@@ -45,6 +45,12 @@ export type CheckOutcome = {
   metrics?: Metrics;
   usage?: Usage[];
   instances?: Instance[];
+  /**
+   * What the instances are, for the headings of their table: `key` names the first column
+   * (default "Region"), `detail` the one showing each instance's id and state (default
+   * "Machine"; left blank when only `key` is given).
+   */
+  instanceLabels?: { key: string; detail?: string };
   /** Set to false when the target was deliberately not touched (e.g. a sleeping machine) */
   probed?: boolean;
 };

@@ -110,6 +110,7 @@ type CheckOutcome = {
   metrics?: Record<string, string | number>;                        // small chips
   usage?: { label; used; limit; unit?; resetsAt? }[];               // quota bars
   instances?: { key; region?; state?; status; latencyMs?; error? }[]; // per machine/region
+  instanceLabels?: { key; detail? };                                  // what the instances are: "Model", "Compute"…
   probed?: boolean;        // false when the target was deliberately not touched
 };
 ```
@@ -230,7 +231,7 @@ hooks and helpers to build your own. See [UI kit](docs/ui.md) and
 - [x] Host-agnostic scheduling: `tick()`, `startScheduler`, `/tick`, refresh on read
 - [x] HTTP API handler, Node adapter
 - [x] Stores: memory, Upstash REST, any Redis client
-- [x] Presets: Fly apps (sleep-safe, per region), GCP instances, AWS/S3, Statuspage, Pusher, AI/translation/video/email/search providers, Vercel, MongoDB, Redis, PostgreSQL
+- [x] Presets: Fly apps (sleep-safe, per region), GCP instances, Neon projects (sleep-safe), AWS/S3/Bedrock, Statuspage, Pusher, Stripe, AI/translation/video/email/search providers, Vercel, MongoDB, Redis, PostgreSQL
 - [x] Stores: SQL (Postgres, MySQL/MariaDB, SQLite), MongoDB
 - [x] React UI kit (headless hooks + HeroUI components)
 - [ ] First npm release

@@ -10,7 +10,9 @@ export type { FlyAppOptions } from "./fly";
 export { clearGoogleTokens, gcp, googleServiceAccountToken, parseServiceAccount, signGoogleAssertion } from "./gcp";
 export type { GcpInstanceOptions, GoogleServiceAccount } from "./gcp";
 export { aws } from "./aws";
-export type { AwsCredentialsOptions, S3BucketOptions } from "./aws";
+export type { AwsCredentialsOptions, BedrockOptions, S3BucketOptions } from "./aws";
+export { neon } from "./neon";
+export type { NeonProjectOptions } from "./neon";
 
 // Databases
 export { mongodb, postgres, redis } from "./databases";
@@ -27,6 +29,8 @@ export {
   deepgram,
   deepl,
   elevenlabs,
+  emelia,
+  exa,
   gemini,
   github,
   gladia,
@@ -34,6 +38,7 @@ export {
   mailersend,
   meilisearch,
   mux,
+  nimble,
   openai,
   pusher,
   resend,
@@ -41,10 +46,13 @@ export {
   signPusherRequest,
   speechmatics,
   statuspage,
+  stripe,
+  tavily,
   upstashRedis,
   vercel,
 } from "./providers";
 export type {
+  AnthropicOptions,
   AttendeeOptions,
   AxiomOptions,
   AzureTranslatorOptions,
@@ -52,6 +60,7 @@ export type {
   DeepgramOptions,
   DeepLOptions,
   ElevenLabsOptions,
+  EmeliaOptions,
   GitHubOptions,
   GoogleTranslateOptions,
   MailerSendOptions,
@@ -63,6 +72,8 @@ export type {
   RevolutOptions,
   SpeechmaticsOptions,
   StatuspageOptions,
+  StripeOptions,
+  TavilyOptions,
   UpstashRedisOptions,
   VercelAiGatewayOptions,
   VercelBlobOptions,
