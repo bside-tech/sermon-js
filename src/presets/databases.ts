@@ -75,3 +75,36 @@ const redisPing = definePreset<RedisPingOptions>()({
 
 /** Presets for Redis servers reached with a client library */
 export const redis = { ping: redisPing };
+
+export type PostgresPingOptions = PresetOptions & {
+  /**
+   * Runs one statement with the driver you already use (pg, postgres.js, Neon…). When
+   * undefined the service is "not configured".
+   */
+  query: ((sql: string) => Promise<unknown>) | undefined;
+  /** Optional: the connection string, only so it is redacted from public errors */
+  secrets?: { url?: string };
+};
+
+/**
+ * PostgreSQL, through your own driver. Runs `select 1`.
+ * - up: the server answers
+ * - down: it can't be reached, or rejects the credentials
+ *
+ * ```ts
+ * postgres.ping({ query: (sql) => pool.query(sql) })
+ * ```
+ */
+const postgresPing = definePreset<PostgresPingOptions>()({
+  kind: "postgres.ping",
+  requiredFields: ["query"],
+  defaults: { slowMs: 1000 },
+  derive: () => ({ name: "PostgreSQL", description: "Runs `select 1`" }),
+  check: ({ options, measure }) =>
+    measure(async () => {
+      await (options.query as (sql: string) => Promise<unknown>)("select 1");
+    }),
+});
+
+/** Presets for PostgreSQL servers reached with a client library */
+export const postgres = { ping: postgresPing };

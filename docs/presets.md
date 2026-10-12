@@ -88,12 +88,17 @@ down when it is rejected.
 | `gladia`, `anthropic`, `gemini`, `cambai` (`secrets: { apiKey }`) | List live sessions / models / languages | |
 | `speechmatics({ secrets: { apiKey }, baseUrl? })` | Batch jobs (limit 1) | |
 | `openai({ secrets: { apiKey }, organization?, track?: { model } })` | Models, or one model | Can't see billing problems |
+| `elevenlabs({ secrets: { apiKey }, track?: { quota } })` | `/v1/user/subscription` | `usage`: credits with reset time; `metrics.tier`; degraded under `quota.warnBelowPct` (10) left. A key without the user scope still counts as up |
+| `vercel.aiGateway({ secrets: { apiKey }, track?: { credits } })` | `/v1/credits` | `metrics.balance`, `metrics.used`; degraded below `credits.warnBelow` (5 USD). `credits: false` lists models instead |
+| `vercel.blob({ secrets: { token } })` | Blobs (limit 1) | The store's read-write token |
 | `deepl({ secrets: { apiKey }, track?: { quota } })` | `/v2/usage` | `usage`: characters; degraded at `quota.warnAbovePct` (90) |
 | `azureTranslator({ secrets: { apiKey }, region? })` | Translates one character | |
 | `googleTranslate({ secrets: { serviceAccount } })` | Token, then v3 `supportedLanguages` | `metrics.languages`. The secret is the service-account JSON, not an API key |
 | `mux({ secrets: { tokenId, tokenSecret } })` | Live streams (limit 1) | |
 | `cloudflareStream({ accountId, secrets: { token }, track?: { storage } })` | Videos and `storage-usage`, in parallel | `usage`: storage minutes; `metrics.videos`; degraded at 90% |
 | `mailersend({ secrets: { apiKey } })` | `/v1/api-quota` | `usage`: API requests with reset time; degraded under 10% left |
+| `resend({ secrets: { apiKey } })` | Domains | `metrics.domains`, `metrics.verified`; degraded when none is verified. A sending-only key still counts as up |
+| `meilisearch({ host, index?, secrets: { apiKey } })` | `/health`, then the index (or the list of indexes), and its statistics | `metrics.documents`, `metrics.indexing`, when the key may read statistics. degraded when the index is missing |
 | `github({ secrets: { token }, track?: { repo, rateLimit } })` | `/rate_limit` (free), optionally a repo's releases | `usage`: requests this hour; down if the repo can't be read |
 | `revolut({ secrets: { apiKey }, environment? })` | Merchant orders (limit 1) | `environment: "sandbox"` for the sandbox API |
 | `attendee({ secrets: { apiKey }, baseUrl? })` | Bots (page size 1) | |
@@ -120,6 +125,7 @@ These take a client you created, so the library never imports a database driver.
 |---|---|---|
 | `mongodb.ping({ client })` | `ping` command | `client` is your `MongoClient` or a `Db`. Pass `secrets: { url }` as well if you want the connection string redacted from errors. |
 | `redis.ping({ client })` | `PING` | A connected ioredis or node-redis client. For Upstash or Vercel KV over REST, use `upstashRedis`, which needs no client. |
+| `postgres.ping({ query })` | `select 1` | `query` runs one statement with your driver: `(sql) => pool.query(sql)` for pg, `(sql) => sql.query(sql)` for Neon. Pass `secrets: { url }` as well to redact the connection string. |
 
 ```ts
 import { MongoClient } from "mongodb";

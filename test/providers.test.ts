@@ -8,16 +8,20 @@ import {
   cloudflareStream,
   deepgram,
   deepl,
+  elevenlabs,
   gemini,
   github,
   gladia,
   mailersend,
+  meilisearch,
   mux,
   openai,
+  resend,
   revolut,
   speechmatics,
   statuspage,
   upstashRedis,
+  vercel,
 } from "../src/presets";
 import { mockFetch, runCheck, type MockRoute } from "../src/testing";
 import type { ServiceDefinition } from "../src";
@@ -47,6 +51,7 @@ describe("single-call providers", () => {
     { name: "Azure Translator", service: azureTranslator({ secrets: { apiKey: "key-123456" } }), url: "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&to=fr", method: "POST", header: ["ocp-apim-subscription-key", "key-123456"], body: '[{"Text":"a"}]' },
     { name: "Revolut Merchant", service: revolut({ secrets: { apiKey: "key-123456" } }), url: "https://merchant.revolut.com/api/1.0/orders?limit=1", header: ["authorization", "Bearer key-123456"] },
     { name: "Attendee", service: attendee({ secrets: { apiKey: "key-123456" } }), url: "https://app.attendee.dev/api/v1/bots?page_size=1", header: ["authorization", "Token key-123456"] },
+    { name: "Vercel Blob", service: vercel.blob({ secrets: { token: "key-123456" } }), url: "https://vercel.com/api/blob?limit=1", header: ["authorization", "Bearer key-123456"] },
     { name: "Axiom", service: axiom({ dataset: "logs", secrets: { token: "key-123456" } }), url: "https://api.axiom.co/v1/datasets/logs/ingest", method: "POST", header: ["authorization", "Bearer key-123456"], body: "[]" },
   ];
 
@@ -283,5 +288,152 @@ describe("upstashRedis", () => {
     });
     expect((await run(service, [{ url: "db.upstash.test", body: { result: "nope" } }])).result).toMatchObject({ status: "down", error: "Unexpected reply to PING" });
     expect(upstashRedis({ url: undefined, secrets: { token: "t" } }).missing).toEqual(['field "url"']);
+  });
+});
+
+describe("vercel.aiGateway", () => {
+  const service = (track?: Parameters<typeof vercel.aiGateway>[0]["track"]) =>
+    vercel.aiGateway({ secrets: { apiKey: "gw-key-12345" }, track });
+  const credits = (balance: string): MockRoute => ({ url: "/v1/credits", body: { balance, total_used: "14.341" } });
+
+  it("reports the credit balance", async () => {
+    const { result, fetch } = await run(service(), [credits("95.50")]);
+    expect(result).toMatchObject({ key: "vercel.aigateway", status: "up", metrics: { balance: "95.5 USD", used: "14.34 USD" } });
+    expect(result.error).toBeUndefined();
+    expect(fetch.calls[0]).toMatchObject({
+      url: "https://ai-gateway.vercel.sh/v1/credits",
+      headers: { authorization: "Bearer gw-key-12345" },
+    });
+  });
+
+  it("is degraded on a low balance, with a configurable threshold", async () => {
+    expect((await run(service(), [credits("0.66")])).result).toMatchObject({ status: "degraded", error: "Low credit balance" });
+    expect((await run(service({ credits: { warnBelow: 0.5 } }), [credits("0.66")])).result.status).toBe("up");
+  });
+
+  it("is down when the key is rejected, and stays up on an answer without a balance", async () => {
+    expect((await run(service(), [{ url: "/v1/credits", status: 401 }])).result).toMatchObject({ status: "down", httpStatus: 401 });
+    const bare = (await run(service(), [{ url: "/v1/credits", body: {} }])).result;
+    expect(bare.status).toBe("up");
+    expect(bare.metrics).toBeUndefined();
+  });
+
+  it("can skip credits and list models instead", async () => {
+    const { result, fetch } = await run(service({ credits: false }), [{ url: "/v1/models", body: { data: [] } }]);
+    expect(result.status).toBe("up");
+    expect(fetch.calls.map((call) => call.url)).toEqual(["https://ai-gateway.vercel.sh/v1/models"]);
+    expect(vercel.aiGateway({ secrets: { apiKey: undefined } }).missing).toEqual(['secret "apiKey"']);
+  });
+});
+
+describe("elevenlabs", () => {
+  const service = (track?: Parameters<typeof elevenlabs>[0]["track"]) => elevenlabs({ secrets: { apiKey: "el-key-12345" }, track });
+  const subscription = (used: number): MockRoute => ({
+    url: "/v1/user/subscription",
+    body: { tier: "creator", character_count: used, character_limit: 100000, next_character_count_reset_unix: 1790000000 },
+  });
+
+  it("reports credits used, with the reset time", async () => {
+    const { result, fetch } = await run(service(), [subscription(25000)]);
+    expect(result).toMatchObject({
+      status: "up",
+      metrics: { tier: "creator" },
+      usage: [{ label: "Credits", used: 25000, limit: 100000, unit: "credits", resetsAt: 1790000000000 }],
+    });
+    expect(fetch.calls[0]).toMatchObject({
+      url: "https://api.elevenlabs.io/v1/user/subscription",
+      headers: { "xi-api-key": "el-key-12345" },
+    });
+  });
+
+  it("is degraded when under 10% is left, with a configurable threshold", async () => {
+    expect((await run(service(), [subscription(95000)])).result).toMatchObject({ status: "degraded", error: "Credits almost exhausted" });
+    expect((await run(service({ quota: { warnBelowPct: 2 } }), [subscription(95000)])).result.status).toBe("up");
+  });
+
+  it("counts a key without the user scope as working, and a rejected key as down", async () => {
+    const restricted = await run(service(), [{ url: "/v1/user/subscription", status: 401, body: { detail: { status: "missing_permissions" } } }]);
+    expect(restricted.result).toMatchObject({ status: "up", httpStatus: 401, metrics: { key: "restricted" } });
+    expect(restricted.result.usage).toBeUndefined();
+    const rejected = await run(service(), [{ url: "/v1/user/subscription", status: 401, body: { detail: { status: "invalid_api_key" } } }]);
+    expect(rejected.result).toMatchObject({ status: "down", httpStatus: 401 });
+  });
+});
+
+describe("resend", () => {
+  const service = resend({ secrets: { apiKey: "re-key-12345" } });
+  const domains = (...statuses: string[]): MockRoute => ({ url: "/domains", body: { data: statuses.map((status) => ({ status })) } });
+
+  it("reports domains and how many are verified", async () => {
+    const { result, fetch } = await run(service, [domains("verified", "pending")]);
+    expect(result).toMatchObject({ key: "resend", status: "up", metrics: { domains: 2, verified: 1 } });
+    expect(fetch.calls[0]).toMatchObject({ url: "https://api.resend.com/domains", headers: { authorization: "Bearer re-key-12345" } });
+    expect((await run(service, [domains()])).result).toMatchObject({ status: "up", metrics: { domains: 0, verified: 0 } });
+  });
+
+  it("is degraded when no domain is verified", async () => {
+    expect((await run(service, [domains("pending", "failed")])).result).toMatchObject({ status: "degraded", error: "No verified domain" });
+  });
+
+  it("counts a sending-only key as working, and a rejected key as down", async () => {
+    const sendingOnly = await run(service, [{ url: "/domains", status: 401, body: { name: "restricted_api_key", message: "This API key is restricted to only send emails" } }]);
+    expect(sendingOnly.result).toMatchObject({ status: "up", httpStatus: 401, metrics: { key: "sending only" } });
+    expect(sendingOnly.result.error).toBeUndefined();
+    const rejected = await run(service, [{ url: "/domains", status: 401, body: { name: "validation_error", message: "API key is invalid" } }]);
+    expect(rejected.result).toMatchObject({ status: "down", httpStatus: 401 });
+  });
+});
+
+describe("meilisearch", () => {
+  const service = (index?: string) => meilisearch({ host: "https://search.test/", index, secrets: { apiKey: "ms-key-12345" } });
+  const health: MockRoute = { url: "/health", body: { status: "available" } };
+  const stats: MockRoute = { url: "/stats", body: { numberOfDocuments: 1200, isIndexing: true } };
+
+  it("reads the health, the index and its statistics", async () => {
+    const { result, fetch } = await run(service("content"), [health, stats, { url: "/indexes/content", body: { uid: "content" } }]);
+    expect(result).toMatchObject({ key: "meilisearch:content", status: "up", metrics: { documents: 1200, indexing: "yes" } });
+    expect(fetch.calls.map((call) => call.url).sort()).toEqual([
+      "https://search.test/health",
+      "https://search.test/indexes/content",
+      "https://search.test/indexes/content/stats",
+    ]);
+    // The key is only sent where it is needed
+    const byUrl = Object.fromEntries(fetch.calls.map((call) => [call.url, call.headers.authorization]));
+    expect(byUrl).toEqual({
+      "https://search.test/health": undefined,
+      "https://search.test/indexes/content": "Bearer ms-key-12345",
+      "https://search.test/indexes/content/stats": "Bearer ms-key-12345",
+    });
+    expect(service("content")).toMatchObject({ kind: "meilisearch", identity: "meilisearch:content" });
+  });
+
+  it("stays up, without metrics, when the key may not read statistics", async () => {
+    const { result } = await run(service("content"), [health, { url: "/stats", status: 403, body: { code: "invalid_api_key" } }, { url: "/indexes/content", body: {} }]);
+    expect(result.status).toBe("up");
+    expect(result.metrics).toBeUndefined();
+  });
+
+  it("is degraded when the index is missing, down when unavailable or the key is rejected", async () => {
+    const missing = await run(service("content"), [health, { url: "/stats", status: 404 }, { url: "/indexes/content", status: 404, body: { code: "index_not_found" } }]);
+    expect(missing.result).toMatchObject({ status: "degraded", error: "Index content not found" });
+    const unavailable = await run(service("content"), [{ url: "/health", body: { status: "starting" } }, stats, { url: "/indexes/content", body: {} }]);
+    expect(unavailable.result).toMatchObject({ status: "down", error: "Not available" });
+    const rejected = await run(service("content"), [health, { url: "/stats", status: 403 }, { url: "/indexes/content", status: 403, body: { code: "invalid_api_key" } }]);
+    expect(rejected.result).toMatchObject({ status: "down", httpStatus: 403 });
+  });
+
+  it("lists indexes and sums their documents without an index", async () => {
+    const { result, fetch } = await run(service(), [
+      health,
+      { url: "/stats", body: { indexes: { a: { numberOfDocuments: 3 }, b: { numberOfDocuments: 4 } } } },
+      { url: "/indexes?limit=1", body: { results: [] } },
+    ]);
+    expect(result).toMatchObject({ status: "up", metrics: { documents: 7 } });
+    expect(fetch.calls.map((call) => call.url).sort()).toEqual([
+      "https://search.test/health",
+      "https://search.test/indexes?limit=1",
+      "https://search.test/stats",
+    ]);
+    expect(meilisearch({ host: undefined, secrets: { apiKey: "k" } }).missing).toEqual(['field "host"']);
   });
 });

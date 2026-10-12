@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aws, mongodb, pusher, redis, signPusherRequest } from "../src/presets";
+import { aws, mongodb, postgres, pusher, redis, signPusherRequest } from "../src/presets";
 import { mockFetch, runCheck, type MockRoute } from "../src/testing";
 
 const awsSecrets = { accessKeyId: "AKIAEXAMPLE123", secretAccessKey: "secret-access-key-123" };
@@ -152,6 +152,37 @@ describe("redis.ping", () => {
     );
     expect(failing).toMatchObject({ status: "down", error: "ECONNREFUSED" });
     expect((await runCheck(redis.ping({ client: undefined }))).status).toBe("unconfigured");
+  });
+});
+
+describe("postgres.ping", () => {
+  it("runs select 1 through your driver", async () => {
+    const statements: string[] = [];
+    const service = postgres.ping({
+      query: async (sql) => {
+        statements.push(sql);
+        return [{ "?column?": 1 }];
+      },
+    });
+    expect(await runCheck(service)).toMatchObject({ key: "postgresql", status: "up", probed: true });
+    expect(statements).toEqual(["select 1"]);
+    expect(service).toMatchObject({ kind: "postgres.ping", name: "PostgreSQL", slowMs: 1000 });
+  });
+
+  it("is down when the query throws, without leaking the connection string, and not configured without a query", async () => {
+    const url = "postgres://app:s3cret-pass@db.internal:5432/app";
+    const failing = await runCheck(
+      postgres.ping({
+        secrets: { url },
+        query: async () => {
+          throw new Error(`connect ECONNREFUSED ${url}`);
+        },
+      })
+    );
+    expect(failing.status).toBe("down");
+    expect(failing.error).toContain("ECONNREFUSED");
+    expect(failing.error).not.toContain("s3cret-pass");
+    expect((await runCheck(postgres.ping({ query: undefined }))).status).toBe("unconfigured");
   });
 });
 

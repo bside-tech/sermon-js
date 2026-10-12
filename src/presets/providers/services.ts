@@ -224,3 +224,102 @@ export const statuspage = definePreset<StatuspageOptions>()({
       return { status, error: status === "up" ? undefined : description };
     }),
 });
+
+export type ResendOptions = PresetOptions & {
+  secrets: { apiKey: string | undefined };
+};
+
+/**
+ * Resend. Lists domains, which validates the API key.
+ * - up: the key works. A sending-only key is refused with `restricted_api_key`, which still
+ *   proves it is valid.
+ * - degraded: domains exist, but none is verified
+ * - down: the API rejects the key or errors
+ *
+ * Reports `metrics.domains` and `metrics.verified` for full-access keys.
+ */
+export const resend = definePreset<ResendOptions>()({
+  kind: "resend",
+  requiredSecrets: ["apiKey"],
+  derive: () => ({ name: "Resend", identity: "resend", description: "Lists domains" }),
+  check: async ({ secrets, http }): Promise<CheckOutcome> => {
+    const res = await http("https://api.resend.com/domains", { headers: bearer(secrets.apiKey) });
+    const body = (res.json as { name?: string; data?: Array<{ status?: string }> }) ?? {};
+    if (res.status === 401 && body.name === "restricted_api_key") {
+      return { status: "up", latencyMs: res.latencyMs, httpStatus: 401, metrics: { key: "sending only" } };
+    }
+    if (!res.ok || !Array.isArray(body.data)) return res.outcome;
+    const verified = body.data.filter((domain) => domain.status === "verified").length;
+    const unverified = body.data.length > 0 && verified === 0;
+    return {
+      ...res.outcome,
+      status: unverified ? "degraded" : "up",
+      error: unverified ? "No verified domain" : undefined,
+      metrics: { domains: body.data.length, verified },
+    };
+  },
+});
+
+export type MeilisearchOptions = PresetOptions & {
+  /** The server, e.g. "https://search.example.com" */
+  host: string | undefined;
+  /** Also require this index, and report its document count */
+  index?: string;
+  secrets: { apiKey: string | undefined };
+};
+
+/**
+ * Meilisearch. Reads `/health`, then the index (or the list of indexes), which validates the key.
+ * - up: the server is available and the key works
+ * - degraded: the index does not exist
+ * - down: the server is unavailable, or rejects the key
+ *
+ * Reports `metrics.documents`, and `metrics.indexing` while a batch is running, when the key
+ * may read statistics; scoped keys often may not, and that is not held against them.
+ */
+export const meilisearch = definePreset<MeilisearchOptions>()({
+  kind: "meilisearch",
+  requiredFields: ["host"],
+  requiredSecrets: ["apiKey"],
+  derive: (options) => ({
+    name: "Meilisearch",
+    identity: options.index ? `meilisearch:${options.index}` : "meilisearch",
+    description: options.index
+      ? `Reads the health and the ${options.index} index`
+      : "Reads the health and lists indexes",
+  }),
+  check: async ({ options, secrets, http, combine }) => {
+    const host = (options.host as string).replace(/\/+$/, "");
+    const headers = bearer(secrets.apiKey);
+    const index = options.index ? `/indexes/${encodeURIComponent(options.index)}` : undefined;
+
+    const health = call(http, `${host}/health`, undefined, (res) =>
+      (res.json as { status?: string })?.status === "available" ? undefined : { status: "down", error: "Not available" }
+    );
+    const access = http(`${host}${index ?? "/indexes?limit=1"}`, { headers }).then((res): CheckOutcome => {
+      if (res.status !== 404 || !options.index) return res.outcome;
+      return {
+        status: "degraded",
+        latencyMs: res.latencyMs,
+        httpStatus: 404,
+        error: `Index ${options.index} not found`,
+      };
+    });
+    const stats = http(`${host}${index ?? ""}/stats`, { headers });
+
+    const outcome = combine(await Promise.all([health, access]));
+    const res = await stats;
+    // Statistics are informative: a key that can't read them is still a working key
+    if (!res.ok) return outcome;
+    const body =
+      (res.json as {
+        numberOfDocuments?: number;
+        isIndexing?: boolean;
+        indexes?: Record<string, { numberOfDocuments?: number }>;
+      }) ?? {};
+    const documents =
+      body.numberOfDocuments ??
+      Object.values(body.indexes ?? {}).reduce((sum, entry) => sum + (entry.numberOfDocuments ?? 0), 0);
+    return { ...outcome, metrics: { ...outcome.metrics, documents, ...(body.isIndexing ? { indexing: "yes" } : {}) } };
+  },
+});

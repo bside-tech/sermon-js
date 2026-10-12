@@ -1,6 +1,6 @@
 import { definePreset, type PresetOptions } from "../../config";
 import type { CheckOutcome } from "../../types";
-import { bearer, call, round } from "./shared";
+import { bearer, call, quota, round } from "./shared";
 
 type ApiKey = { secrets: { apiKey: string | undefined } };
 
@@ -144,4 +144,61 @@ export const cambai = definePreset<PresetOptions & ApiKey>()({
   derive: () => ({ name: "CAMB.AI", identity: "cambai", description: "Lists source languages" }),
   check: ({ secrets, http }) =>
     call(http, "https://client.camb.ai/apis/source-languages", { headers: { "x-api-key": secrets.apiKey } }),
+});
+
+export type ElevenLabsOptions = PresetOptions &
+  ApiKey & {
+    track?: {
+      /** Warn when less than this share of the period's credits is left (default 10) */
+      quota?: { warnBelowPct?: number };
+    };
+  };
+
+/**
+ * ElevenLabs. Reads the subscription, which validates the API key.
+ * - up: the key works. A key without the user scope is refused with `missing_permissions`,
+ *   which still proves it is valid.
+ * - degraded: less than `track.quota.warnBelowPct` of the credits left
+ * - down: the API rejects the key or errors
+ *
+ * Reports a `usage` bar (credits used this period, with the reset time) and `metrics.tier`.
+ */
+export const elevenlabs = definePreset<ElevenLabsOptions>()({
+  kind: "elevenlabs",
+  requiredSecrets: ["apiKey"],
+  derive: () => ({ name: "ElevenLabs", identity: "elevenlabs", description: "Reads the subscription" }),
+  check: async ({ options, secrets, http }): Promise<CheckOutcome> => {
+    const res = await http("https://api.elevenlabs.io/v1/user/subscription", {
+      headers: { "xi-api-key": secrets.apiKey },
+    });
+    const body =
+      (res.json as {
+        detail?: { status?: string };
+        tier?: string;
+        character_count?: number;
+        character_limit?: number;
+        next_character_count_reset_unix?: number;
+      }) ?? {};
+    if (res.status === 401 && body.detail?.status === "missing_permissions") {
+      return { status: "up", latencyMs: res.latencyMs, httpStatus: 401, metrics: { key: "restricted" } };
+    }
+    if (!res.ok) return res.outcome;
+    const metrics = body.tier ? { tier: body.tier } : undefined;
+    const { character_count: used, character_limit: limit } = body;
+    if (typeof used !== "number" || !limit) return { ...res.outcome, metrics };
+    return {
+      ...res.outcome,
+      ...quota({
+        label: "Credits",
+        used,
+        limit,
+        unit: "credits",
+        // ElevenLabs gives the reset as epoch seconds
+        resetsAt: body.next_character_count_reset_unix ? body.next_character_count_reset_unix * 1000 : undefined,
+        warnAbovePct: 100 - (options.track?.quota?.warnBelowPct ?? 10),
+        warning: "Credits almost exhausted",
+      }),
+      metrics,
+    };
+  },
 });

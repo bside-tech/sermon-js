@@ -230,7 +230,7 @@ hooks and helpers to build your own. See [UI kit](docs/ui.md) and
 - [x] Host-agnostic scheduling: `tick()`, `startScheduler`, `/tick`, refresh on read
 - [x] HTTP API handler, Node adapter
 - [x] Stores: memory, Upstash REST, any Redis client
-- [x] Presets: Fly apps (sleep-safe, per region), GCP instances, AWS/S3, Statuspage, Pusher, AI/translation/video/email providers, MongoDB, Redis
+- [x] Presets: Fly apps (sleep-safe, per region), GCP instances, AWS/S3, Statuspage, Pusher, AI/translation/video/email/search providers, Vercel, MongoDB, Redis, PostgreSQL
 - [x] Stores: SQL (Postgres, MySQL/MariaDB, SQLite), MongoDB
 - [x] React UI kit (headless hooks + HeroUI components)
 - [ ] First npm release

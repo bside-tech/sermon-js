@@ -13,8 +13,8 @@ export { aws } from "./aws";
 export type { AwsCredentialsOptions, S3BucketOptions } from "./aws";
 
 // Databases
-export { mongodb, redis } from "./databases";
-export type { MongoPingOptions, RedisPingOptions } from "./databases";
+export { mongodb, postgres, redis } from "./databases";
+export type { MongoPingOptions, PostgresPingOptions, RedisPingOptions } from "./databases";
 
 // Providers
 export {
@@ -26,19 +26,23 @@ export {
   cloudflareStream,
   deepgram,
   deepl,
+  elevenlabs,
   gemini,
   github,
   gladia,
   googleTranslate,
   mailersend,
+  meilisearch,
   mux,
   openai,
   pusher,
+  resend,
   revolut,
   signPusherRequest,
   speechmatics,
   statuspage,
   upstashRedis,
+  vercel,
 } from "./providers";
 export type {
   AttendeeOptions,
@@ -47,14 +51,19 @@ export type {
   CloudflareStreamOptions,
   DeepgramOptions,
   DeepLOptions,
+  ElevenLabsOptions,
   GitHubOptions,
   GoogleTranslateOptions,
   MailerSendOptions,
+  MeilisearchOptions,
   MuxOptions,
   OpenAIOptions,
   PusherOptions,
+  ResendOptions,
   RevolutOptions,
   SpeechmaticsOptions,
   StatuspageOptions,
   UpstashRedisOptions,
+  VercelAiGatewayOptions,
+  VercelBlobOptions,
 } from "./providers";
