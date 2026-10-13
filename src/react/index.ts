@@ -1,7 +1,7 @@
 export { createStatusClient, RateLimitError } from "./client";
 export type { StatusClient } from "./client";
 
-export { StatusProvider, useHistory, useRunChecks, useStatus, useStatusClient } from "./hooks";
+export { StatusProvider, useHistory, useRunChecks, useStatus, useStatusAt, useStatusClient } from "./hooks";
 
 export { buildLayout, flattenServices, isStale, mergeBars, sectionsOf, servicesOf, sortServices, statusOf } from "./tree";
 export type { LayoutBlock, Section } from "./tree";

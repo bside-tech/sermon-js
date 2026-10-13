@@ -1,6 +1,6 @@
 import { Chip } from "@heroui/react";
 import type { Status, StatusSnapshot } from "../../types";
-import { formatDuration, LABEL_TEXT, LABEL_TONE, STATUS_TEXT, STATUS_TONE, timeAgo, type Tone } from "../format";
+import { formatDateTime, formatDuration, LABEL_TEXT, LABEL_TONE, STATUS_TEXT, STATUS_TONE, timeAgo, type Tone } from "../format";
 import { TONE_BG, TONE_TEXT } from "./tones";
 
 const SIZE = 88;
@@ -60,7 +60,11 @@ export function ScoreHeader({ snapshot }: { snapshot: StatusSnapshot }) {
           ))}
         </div>
         <p className="text-xs text-muted">
-          {snapshot.lastCheckedAt
+          {snapshot.period
+            ? `${snapshot.period.runs} run(s) between ${formatDateTime(snapshot.period.start)} and ${formatDateTime(
+                snapshot.period.end + 1
+              )}`
+            : snapshot.lastCheckedAt
             ? `Last checked ${timeAgo(snapshot.lastCheckedAt)} · checks run every ${formatDuration(snapshot.intervalMs)}`
             : "No checks have run yet"}
         </p>

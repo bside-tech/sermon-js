@@ -37,7 +37,14 @@ afterEach(() => {
 });
 
 /** A real engine and handler; the page talks to it through the client */
-async function setup({ ranAgoMs = 0 }: { ranAgoMs?: number } = {}) {
+async function setup({
+  ranAgoMs = 0,
+  recovered = false,
+}: {
+  ranAgoMs?: number;
+  /** Run a second time now, with the API back up */
+  recovered?: boolean;
+} = {}) {
   let now = Date.now() - ranAgoMs;
   const state = { apiUp: false };
   const status = defineStatus({
@@ -89,6 +96,10 @@ async function setup({ ranAgoMs = 0 }: { ranAgoMs?: number } = {}) {
   });
   await status.run({ trigger: "scheduled" });
   now = Date.now();
+  if (recovered) {
+    state.apiUp = true;
+    await status.run({ trigger: "scheduled" });
+  }
 
   const handler = createStatusHandler(status, { cache: false });
   const client = createStatusClient({
@@ -97,7 +108,7 @@ async function setup({ ranAgoMs = 0 }: { ranAgoMs?: number } = {}) {
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(<StatusPage client={client} queryClient={queryClient} brand={<h1>Acme Status</h1>} defaultExpanded />);
-  await screen.findByText("Major outage");
+  await screen.findByText(recovered ? "All systems operational" : "Major outage");
   return { ...view, status, state };
 }
 
@@ -271,5 +282,65 @@ describe("<StatusPage>", () => {
     const client = createStatusClient({ fetch: (async () => new Response("nope", { status: 500 })) as typeof fetch });
     render(<StatusPage client={client} queryClient={new QueryClient({ defaultOptions: { queries: { retry: false } } })} />);
     await screen.findByText("Could not load status: Request failed (500)");
+  });
+
+  it("shows the whole page as it was when a history bar is clicked", async () => {
+    await setup({ ranAgoMs: 60 * 60_000, recovered: true });
+    const api = () => document.getElementById("service-our-services:api")!;
+    expect(within(api()).getByText("Operational")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Run all checks/ })).toBeTruthy();
+
+    // Two bars hold a run: an hour ago (the outage) and now
+    const bars = await screen.findAllByRole("button", { name: /Show the page at this time/ });
+    expect(bars).toHaveLength(2);
+    fireEvent.click(bars[0]!);
+
+    await screen.findByText("Major outage");
+    expect(bars[0]!.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText(/^Showing /)).toBeTruthy();
+    expect(screen.getByText(/1 run\(s\) between/)).toBeTruthy();
+    expect(within(api()).getByText("Down")).toBeTruthy();
+    expect(within(api()).getByText("HTTP 500: boom")).toBeTruthy();
+    // The past can't be re-run, and statistics and usage belong to the present
+    expect(screen.queryByRole("button", { name: /Run all checks/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Check API now/ })).toBeNull();
+    expect(within(api()).queryByText("Uptime 24h")).toBeNull();
+    expect(screen.queryByText("API requests")).toBeNull();
+    // Per-instance statuses were recorded, with the names known today
+    const edge = document.getElementById("service-our-services:regions:edge")!;
+    expect(within(edge).getByText("ams")).toBeTruthy();
+    expect(within(edge).getByText("Amsterdam")).toBeTruthy();
+    // A service that wasn't checked then
+    expect(within(document.getElementById("service-billing")!).getByText("No data")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to live" }));
+    await screen.findByText("All systems operational");
+    expect(within(api()).getByText("Operational")).toBeTruthy();
+    expect(screen.queryByText(/^Showing /)).toBeNull();
+    expect(screen.getByRole("button", { name: /Run all checks/ })).toBeTruthy();
+
+    // Clicking the selected bar again also returns to live
+    fireEvent.click(bars[0]!);
+    await screen.findByText("Major outage");
+    fireEvent.click(bars[0]!);
+    await screen.findByText("All systems operational");
+  });
+
+  it("opens the sections that had a failing service when looking at the past", async () => {
+    cleanup();
+    localStorage.setItem("sermon:section:our-services", "collapsed");
+    await setup({ ranAgoMs: 60 * 60_000, recovered: true });
+    const section = document.getElementById("group-our-services")!;
+    const toggle = () => within(section).getByRole("button", { name: /(Expand|Collapse) Our services/ });
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click((await screen.findAllByRole("button", { name: /Show the page at this time/ }))[0]!);
+    await screen.findByText("Major outage");
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    // The viewer's own choice is untouched
+    expect(localStorage.getItem("sermon:section:our-services")).toBe("collapsed");
+    fireEvent.click(screen.getByRole("button", { name: "Back to live" }));
+    await screen.findByText("All systems operational");
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
   });
 });

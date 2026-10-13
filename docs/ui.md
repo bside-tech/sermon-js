@@ -39,6 +39,18 @@ circle per service, per-service details (response time, percentiles, uptime, spa
 per-region rows, usage bars, errors), on-demand checks, a side index on wide screens, deep
 links, a stale-data warning and a theme switch. See [`examples/vite`](../examples/vite).
 
+### Looking at the past
+
+Click a history bar and the whole page shows that period instead of the present: the score,
+the counts, and for every service its worst result of the period, with the error and the
+per-region statuses recorded then. Sections that had a failing service open by themselves. A
+notice stays in view with the period and a "Back to live" button; clicking the bar again does
+the same.
+
+Only what is stored per run can be shown: status, response time, HTTP status, error and
+per-instance status. Usage bars, metrics and the 24-hour statistics describe the present and
+are left out.
+
 Components are client components (`"use client"`), so they work in the Next.js App Router.
 
 ### How the tree becomes a page
@@ -108,7 +120,11 @@ function Dashboard() {
 
 Components: `StatusPage`, `ScoreHeader`, `ScoreRing`, `HistoryBars`, `ServiceSection`,
 `ServiceRow`, `ServiceNav`, `InstanceTable`, `UsageBar`, `Sparkline`, `RunAllButton`,
-`ThemeSwitcher`, `StaleNotice`.
+`ThemeSwitcher`, `StaleNotice`, `PeriodNotice`.
+
+When you compose your own page, `HistoryBars` takes `selected` and `onSelect` (bars are only
+clickable with `onSelect`), `useStatusAt(period)` loads the past snapshot, and
+`KitOptions` takes `historical: true` to hide on-demand runs and present-only statistics.
 
 ## Headless: `sermon-js/react`
 
@@ -116,9 +132,10 @@ Needs only `react` and `@tanstack/react-query`.
 
 | | |
 |---|---|
-| `createStatusClient({ baseUrl, fetch })` | `status()`, `history(range)`, `serviceHistory(key, range)`, `run(key?)` |
+| `createStatusClient({ baseUrl, fetch })` | `status()`, `statusAt({ start, end })`, `history(range)`, `serviceHistory(key, range)`, `run(key?)` |
 | `StatusProvider` | Gives the hooks a base URL or a client |
 | `useStatus()`, `useHistory(range)` | React Query queries, refreshed periodically |
+| `useStatusAt(period \| null)` | The snapshot of a past period (`{ start, end }` in ms); `null` fetches nothing |
 | `useRunChecks()` | Mutation: `mutate()` runs everything, `mutate(key)` one service. A refused run is a `RateLimitError` with `retryAfter` |
 | `buildLayout(tree)`, `flattenServices`, `servicesOf`, `sectionsOf` | Turn the snapshot tree into page blocks |
 | `statusOf(service)`, `sortServices` | Display status and failing-first order |

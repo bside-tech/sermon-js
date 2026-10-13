@@ -189,6 +189,11 @@ export type StatusSnapshot = {
   label: ScoreLabel;
   counts: Record<Status, number>;
   tree: SnapshotNode[];
+  /**
+   * Set on a snapshot of the past (`snapshotAt`): the period it covers and how many runs
+   * happened in it. Each service then shows its worst result of the period.
+   */
+  period?: { start: number; end: number; runs: number };
 };
 
 export type HistoryRange = "24h" | "7d";

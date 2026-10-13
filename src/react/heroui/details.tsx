@@ -97,7 +97,10 @@ export function InstanceTable({
   stats,
   regionNames = FLY_REGIONS,
   labels,
+  showStats = true,
 }: {
+  /** Show the 24-hour columns (default true) */
+  showStats?: boolean;
   instances: Instance[];
   /** Headings of the first two columns (default "Region" and "Machine") */
   labels?: { key: string; detail?: string };
@@ -113,8 +116,8 @@ export function InstanceTable({
             <th className="py-1 pr-3 font-normal">{labels ? (labels.detail ?? "") : "Machine"}</th>
             <th className="py-1 pr-3 font-normal">Status</th>
             <th className="py-1 pr-3 text-right font-normal">Response</th>
-            <th className="py-1 pr-3 text-right font-normal">p50 24h</th>
-            <th className="py-1 text-right font-normal">Uptime 24h</th>
+            {showStats && <th className="py-1 pr-3 text-right font-normal">p50 24h</th>}
+            {showStats && <th className="py-1 text-right font-normal">Uptime 24h</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -145,8 +148,8 @@ export function InstanceTable({
                 <td className="py-1.5 pr-3 text-right tabular-nums">
                   {instance.latencyMs !== undefined ? formatMs(instance.latencyMs) : "–"}
                 </td>
-                <td className="py-1.5 pr-3 text-right tabular-nums">{formatMs(instanceStats?.p50)}</td>
-                <td className="py-1.5 text-right tabular-nums">{formatPct(instanceStats?.uptime24h)}</td>
+                {showStats && <td className="py-1.5 pr-3 text-right tabular-nums">{formatMs(instanceStats?.p50)}</td>}
+                {showStats && <td className="py-1.5 text-right tabular-nums">{formatPct(instanceStats?.uptime24h)}</td>}
               </tr>
             );
           })}

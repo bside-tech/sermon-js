@@ -11,6 +11,8 @@ export class RateLimitError extends Error {
 
 export type StatusClient = {
   status(): Promise<StatusSnapshot>;
+  /** The page as it was during a past period: each service's worst result in it */
+  statusAt(period: { start: number; end: number }): Promise<StatusSnapshot>;
   history(range: HistoryRange): Promise<HistoryPayload>;
   serviceHistory(key: string, range: HistoryRange): Promise<ServiceHistory>;
   /** Run everything, or one service; resolves with the fresh snapshot */
@@ -38,6 +40,7 @@ export function createStatusClient({
   }
   return {
     status: () => request("/status"),
+    statusAt: ({ start, end }) => request(`/status/at?start=${start}&end=${end}`),
     history: (range) => request(`/history?range=${range}`),
     serviceHistory: (key, range) => request(`/services/${encodeURIComponent(key)}/history?range=${range}`),
     run: (key) => request(key ? `/run/${encodeURIComponent(key)}` : "/run", { method: "POST" }),

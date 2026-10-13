@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { HistoryRange } from "../types";
 import { createStatusClient, type StatusClient } from "./client";
@@ -31,6 +31,22 @@ export function useStatusClient(): StatusClient {
 export function useStatus({ refetchInterval = 30_000 }: { refetchInterval?: number | false } = {}) {
   const client = useStatusClient();
   return useQuery({ queryKey: ["sermon", "status"], queryFn: () => client.status(), refetchInterval });
+}
+
+/**
+ * The page as it was during a past period (e.g. the history bar a viewer clicked). Pass `null`
+ * for "no period": nothing is fetched. While another period loads, the previous one stays.
+ */
+export function useStatusAt(period: { start: number; end: number } | null) {
+  const client = useStatusClient();
+  return useQuery({
+    queryKey: ["sermon", "status-at", period?.start, period?.end],
+    queryFn: () => client.statusAt(period!),
+    enabled: period !== null,
+    placeholderData: keepPreviousData,
+    // The past doesn't change
+    staleTime: 5 * 60_000,
+  });
 }
 
 /** The score history for a range */

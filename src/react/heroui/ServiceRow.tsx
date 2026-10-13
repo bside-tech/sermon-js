@@ -11,7 +11,14 @@ import { PlayIcon } from "./icons";
 import { TONE_BG } from "./tones";
 
 /** Display options shared by the kit's components */
-export const KitOptions = createContext<{ regionNames: Record<string, string>; allowRuns: boolean }>({
+export const KitOptions = createContext<{
+  regionNames: Record<string, string>;
+  allowRuns: boolean;
+  /** The page shows a past period: no on-demand runs, no statistics, and failing sections open */
+  historical?: boolean;
+  /** Identifies the period shown, so per-period choices reset when it changes */
+  periodKey?: string;
+}>({
   regionNames: FLY_REGIONS,
   allowRuns: true,
 });
@@ -33,7 +40,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 export function ServiceRow({ service }: { service: ServiceSnapshot }) {
   const run = useRunChecks();
-  const { regionNames, allowRuns } = useContext(KitOptions);
+  const { regionNames, allowRuns, historical = false } = useContext(KitOptions);
   const status = statusOf(service);
   const tone = STATUS_TONE[status];
   const { result, stats } = service;
@@ -48,7 +55,7 @@ export function ServiceRow({ service }: { service: ServiceSnapshot }) {
   return (
     <div
       id={serviceAnchor(service.key)}
-      className={`flex scroll-mt-6 flex-col gap-3 py-4 ${service.configured ? "" : "opacity-60"}`}
+      className={`flex scroll-mt-16 flex-col gap-3 py-4 ${service.configured ? "" : "opacity-60"}`}
     >
       <div className="flex flex-wrap items-start gap-3">
         <span className={`mt-1.5 size-2.5 shrink-0 rounded-full ${TONE_BG[tone]}`} aria-hidden />
@@ -61,7 +68,7 @@ export function ServiceRow({ service }: { service: ServiceSnapshot }) {
               </Chip>
             )}
             <Chip size="sm" variant="soft" color={tone}>
-              {STATUS_TEXT[status]}
+              {historical && !result ? "No data" : STATUS_TEXT[status]}
             </Chip>
           </div>
           {service.description && <p className="text-xs text-muted">{service.description}</p>}
@@ -69,7 +76,7 @@ export function ServiceRow({ service }: { service: ServiceSnapshot }) {
             <p className="text-xs text-muted">Missing: {service.missing.join(", ")}</p>
           )}
         </div>
-        {allowRuns && (
+        {allowRuns && !historical && (
           <div className="flex items-center gap-2">
             {rateLimited && <span className="text-xs text-muted">wait {rateLimited.retryAfter}s</span>}
             <Button
@@ -90,11 +97,18 @@ export function ServiceRow({ service }: { service: ServiceSnapshot }) {
       {service.configured && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pl-5.5">
           <Stat label="Response" value={result?.probed === false ? "not probed" : formatMs(result?.latencyMs)} />
-          <Stat label="p50 / p95 24h" value={`${formatMs(stats?.p50)} / ${formatMs(stats?.p95)}`} />
-          <Stat label="Uptime 24h" value={formatPct(stats?.uptime24h)} />
-          <Stat label="Uptime 7d" value={formatPct(stats?.uptime7d)} />
-          {stats && <Sparkline values={stats.latency} threshold={service.slowMs} />}
-          {result && <Stat label="Checked" value={timeAgo(result.checkedAt)} />}
+          {/* Statistics describe the last 24 hours and 7 days from now: they don't belong to a past period */}
+          {!historical && (
+            <>
+              <Stat label="p50 / p95 24h" value={`${formatMs(stats?.p50)} / ${formatMs(stats?.p95)}`} />
+              <Stat label="Uptime 24h" value={formatPct(stats?.uptime24h)} />
+              <Stat label="Uptime 7d" value={formatPct(stats?.uptime7d)} />
+              {stats && <Sparkline values={stats.latency} threshold={service.slowMs} />}
+            </>
+          )}
+          {result && (
+            <Stat label="Checked" value={historical ? formatDateTime(result.checkedAt) : timeAgo(result.checkedAt)} />
+          )}
         </div>
       )}
 
@@ -105,6 +119,7 @@ export function ServiceRow({ service }: { service: ServiceSnapshot }) {
             stats={stats?.instances}
             regionNames={regionNames}
             labels={result.instanceLabels}
+            showStats={!historical}
           />
         </div>
       )}

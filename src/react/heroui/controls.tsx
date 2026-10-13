@@ -1,11 +1,11 @@
 import { Button, ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import type { StatusSnapshot } from "../../types";
 import { RateLimitError } from "../client";
-import { formatDuration, timeAgo } from "../format";
+import { formatDateTime, formatDuration, timeAgo } from "../format";
 import { useRunChecks } from "../hooks";
 import { useThemePreference, type ThemePreference } from "../theme";
 import { isStale } from "../tree";
-import { AlertIcon, DesktopIcon, MoonIcon, RefreshIcon, SunIcon } from "./icons";
+import { AlertIcon, ClockIcon, DesktopIcon, MoonIcon, RefreshIcon, SunIcon } from "./icons";
 
 /** Runs every check on demand; the icon spins while they run */
 export function RunAllButton({ label = "Run all checks" }: { label?: string }) {
@@ -52,6 +52,43 @@ export function ThemeSwitcher() {
         </ToggleButton>
       ))}
     </ToggleButtonGroup>
+  );
+}
+
+/**
+ * Shown while the page displays a past period, and stays in view while scrolling: it says
+ * which period, and brings back the live results.
+ */
+export function PeriodNotice({
+  period,
+  loading = false,
+  onClear,
+}: {
+  period: { start: number; end: number };
+  loading?: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      className="sticky top-2 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm shadow-sm"
+    >
+      <span className="flex min-w-0 items-start gap-2">
+        <ClockIcon size={16} className="mt-0.5 shrink-0 text-muted" />
+        <span>
+          <span className="font-medium">
+            {loading ? "Loading " : "Showing "}
+            {formatDateTime(period.start)} – {formatDateTime(period.end + 1)}
+          </span>
+          <span className="block text-xs text-muted">
+            Each service shows its worst result in this period. Usage and statistics are only kept for the present.
+          </span>
+        </span>
+      </span>
+      <Button size="sm" variant="tertiary" onPress={onClear}>
+        Back to live
+      </Button>
+    </div>
   );
 }
 

@@ -138,6 +138,46 @@ describe("defineStatus", () => {
     await expect(status.serviceHistory("nope")).rejects.toThrow(/unknown service key/);
   });
 
+  it("rebuilds the page as it was during a past period", async () => {
+    const { status, state, clock } = setup();
+    const first = clock.now();
+    await status.run({ trigger: "scheduled" });
+    clock.advance(5 * MINUTE);
+    state.apiUp = false;
+    const second = clock.now();
+    await status.run({ trigger: "scheduled" });
+    clock.advance(5 * MINUTE);
+    state.apiUp = true;
+    await status.run({ trigger: "scheduled" });
+
+    const flat = (tree: Awaited<ReturnType<typeof status.snapshot>>["tree"]): Array<Extract<(typeof tree)[number], { type: "service" }>> =>
+      tree.flatMap((node) => (node.type === "service" ? [node] : flat(node.children)));
+
+    // Now everything is fine again; the bar of the second run still shows the outage
+    expect((await status.snapshot()).label).toBe("degraded");
+    const past = await status.snapshotAt({ start: second, end: second + 5 * MINUTE - 1 });
+    expect(past).toMatchObject({ score: 51, label: "outage", period: { start: second, runs: 1 }, nextDueAt: null });
+    expect(past.counts).toMatchObject({ up: 1, down: 1, degraded: 1 });
+    const services = Object.fromEntries(flat(past.tree).map((service) => [service.key, service]));
+    expect(services["our-services:api"]).toMatchObject({ configured: true, result: { status: "down", checkedAt: second } });
+    expect(services["our-services:workers:queue"]?.result).toMatchObject({ status: "degraded", error: "Backlog" });
+    expect(services["our-services:web-app"]?.result).toMatchObject({ status: "up", httpStatus: 200 });
+    // Statistics belong to the present, and a service without a sample has no result
+    expect(services["our-services:api"]?.stats).toBeUndefined();
+    expect(services["billing"]).toMatchObject({ configured: false });
+    expect(services["billing"]?.result).toBeUndefined();
+
+    // A period holding several runs keeps the worst result of each service, and the worst score
+    const all = await status.snapshotAt({ start: first, end: clock.now() });
+    expect(all).toMatchObject({ score: 51, label: "outage", period: { runs: 3 } });
+    expect(Object.fromEntries(flat(all.tree).map((s) => [s.key, s.result?.status]))["our-services:api"]).toBe("down");
+
+    // Nothing recorded: an empty page, not an error
+    const empty = await status.snapshotAt({ start: first - 60 * MINUTE, end: first - 1 });
+    expect(empty).toMatchObject({ score: null, label: "unknown", period: { runs: 0 } });
+    expect(flat(empty.tree).every((service) => !service.result)).toBe(true);
+  });
+
   it("forgets history older than the retention and services that were removed", async () => {
     const store = memoryStore();
     const first = setup({ store, extra: [custom({ name: "Legacy", check: () => true })] });

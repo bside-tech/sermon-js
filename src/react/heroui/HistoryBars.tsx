@@ -1,10 +1,13 @@
 import { Chip, Tabs } from "@heroui/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { HistoryBar, HistoryRange } from "../../types";
 import { formatDateTime, formatDuration, LABEL_TEXT, LABEL_TONE } from "../format";
 import { useHistory } from "../hooks";
 import { mergeBars } from "../tree";
 import { TONE_BG, TONE_TEXT } from "./tones";
+
+/** A stretch of history, in ms timestamps (inclusive) */
+export type HistoryPeriod = { start: number; end: number };
 
 /** Minimum room for one bar and its gap */
 const MIN_BAR_PX = 3;
@@ -19,7 +22,18 @@ function average(bars: HistoryBar[]) {
  * Score history as bars over a full-height gray track: the gray above a bar is what was
  * missing to 100, and an all-gray column means no data. Hover a bar for its details.
  */
-export function HistoryBars({ names = {} }: { /** Service names by key, to label failures */ names?: Record<string, string> }) {
+export function HistoryBars({
+  names = {},
+  selected = null,
+  onSelect,
+}: {
+  /** Service names by key, to label failures */
+  names?: Record<string, string>;
+  /** The period currently shown by the page, if any: its bar is highlighted */
+  selected?: HistoryPeriod | null;
+  /** Makes bars clickable: called with a bar's period, or `null` when the selected bar is clicked again */
+  onSelect?: (period: HistoryPeriod | null) => void;
+}) {
   const [range, setRange] = useState<HistoryRange>("24h");
   const [hovered, setHovered] = useState<number | null>(null);
   const history = useHistory(range);
@@ -41,8 +55,18 @@ export function HistoryBars({ names = {} }: { /** Service names by key, to label
     () => mergeBars(history.data?.bars ?? [], width ? Math.floor(width / MIN_BAR_PX) : Infinity),
     [history.data, width]
   );
-  const active = (hovered !== null && bars[hovered]) || bars.findLast((bar) => bar.runs > 0);
+  const spanMs = (history.data?.bucketMs ?? 0) * factor;
+  // A selection made at another zoom level still highlights the bar that contains it
+  const selectedIndex = selected ? bars.findIndex((bar) => selected.start >= bar.start && selected.start < bar.start + spanMs) : -1;
+  const active =
+    (hovered !== null && bars[hovered]) || (selectedIndex >= 0 && bars[selectedIndex]) || bars.findLast((bar) => bar.runs > 0);
   const avg = average(bars);
+  const dimmedBy = hovered ?? (selectedIndex >= 0 ? selectedIndex : null);
+  const toggle = (bar: HistoryBar, index: number) => {
+    if (!onSelect || bar.runs === 0) return;
+    // Periods are inclusive: stop just before the next bar starts
+    onSelect(index === selectedIndex ? null : { start: bar.start, end: bar.start + spanMs - 1 });
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -54,7 +78,13 @@ export function HistoryBars({ names = {} }: { /** Service names by key, to label
             {avg !== null && ` · average ${avg}`}
           </p>
         </div>
-        <Tabs selectedKey={range} onSelectionChange={(key) => setRange(key as HistoryRange)}>
+        <Tabs
+          selectedKey={range}
+          onSelectionChange={(key) => {
+            setRange(key as HistoryRange);
+            setHovered(null);
+          }}
+        >
           <Tabs.ListContainer>
             <Tabs.List aria-label="History range">
               <Tabs.Tab id="24h">
@@ -74,20 +104,40 @@ export function HistoryBars({ names = {} }: { /** Service names by key, to label
         ref={chart}
         className="flex h-24 items-end gap-px"
         onMouseLeave={() => setHovered(null)}
-        role="img"
+        role={onSelect ? "group" : "img"}
         aria-label={`System score over the last ${range}`}
       >
         {history.isPending &&
           Array.from({ length: 48 }, (_, index) => (
             <div key={index} className="h-1/3 flex-1 animate-pulse rounded-sm bg-default" />
           ))}
-        {bars.map((bar, index) => (
+        {bars.map((bar, index) => {
+          const clickable = !!onSelect && bar.runs > 0;
+          return (
           <div
             key={bar.start}
-            className={`relative h-full flex-1 cursor-default overflow-hidden rounded-sm bg-default transition-opacity ${
-              hovered !== null && hovered !== index ? "opacity-50" : ""
+            className={`relative h-full flex-1 overflow-hidden rounded-sm bg-default transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+              clickable ? "cursor-pointer" : "cursor-default"
+            } ${dimmedBy !== null && dimmedBy !== index ? "opacity-50" : ""} ${
+              index === selectedIndex ? "ring-2 ring-foreground" : ""
             }`}
             onMouseEnter={() => setHovered(index)}
+            {...(clickable
+              ? {
+                  role: "button",
+                  tabIndex: 0,
+                  "aria-pressed": index === selectedIndex,
+                  "aria-label": `${formatDateTime(bar.start)}: ${
+                    bar.score === null ? "no data" : `score ${bar.score}`
+                  }. Show the page at this time`,
+                  onClick: () => toggle(bar, index),
+                  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    toggle(bar, index);
+                  },
+                }
+              : {})}
           >
             {bar.score !== null && (
               <div
@@ -97,7 +147,8 @@ export function HistoryBars({ names = {} }: { /** Service names by key, to label
               />
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="flex justify-between text-[11px] text-muted">
@@ -114,6 +165,13 @@ export function HistoryBars({ names = {} }: { /** Service names by key, to label
                 {active.score === null ? "No data" : `Score ${active.score} · ${LABEL_TEXT[active.label]}`}
               </span>
               {active.runs > 0 && <span className="text-muted">{active.runs} run(s)</span>}
+              {onSelect && active.runs > 0 && (
+                <span className="ml-auto text-muted">
+                  {selectedIndex >= 0 && bars[selectedIndex] === active
+                    ? "Shown below · click again for live"
+                    : "Click to show the page at this time"}
+                </span>
+              )}
             </div>
             {Object.keys(active.failing).length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1.5">

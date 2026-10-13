@@ -46,6 +46,21 @@ describe("createStatusHandler", () => {
     expect((await call("/api/services/nope/history")).status).toBe(404);
   });
 
+  it("serves the page as it was during a past period", async () => {
+    const { call, status } = setup();
+    const before = Date.now();
+    await status.run();
+    const res = await call(`/api/status/at?start=${before - MINUTE}&end=${Date.now() + MINUTE}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cdn-cache-control")).toBe("max-age=30, stale-while-revalidate=90");
+    expect(await res.json()).toMatchObject({ schemaVersion: 1, score: 100, period: { runs: 1 }, tree: [{ type: "group" }] });
+
+    for (const query of ["", "?start=1", "?start=abc&end=5", "?start=10&end=5", "?start=1.5&end=9", `?start=0&end=${8 * 24 * 60 * MINUTE}`]) {
+      expect((await call(`/api/status/at${query}`)).status).toBe(400);
+    }
+    expect((await call("/api/status/at/extra?start=1&end=2")).status).toBe(404);
+  });
+
   it("can disable shared caching", async () => {
     const { call } = setup({ cache: false });
     const res = await call("/api/status");

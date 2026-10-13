@@ -159,6 +159,7 @@ await status.tick();                      // run everything, only if due (idempo
 await status.run();                       // run everything now
 await status.run({ keys: ["queue-depth"] });
 await status.snapshot();                  // tree + latest results + statistics + score
+await status.snapshotAt({ start, end });   // the same tree as it was during a past period
 await status.history({ range: "24h" });   // score history, one bar per interval ("24h" | "7d")
 await status.serviceHistory("queue-depth");
 ```
@@ -181,6 +182,7 @@ createStatusHandler(status, {
 | Route | |
 |---|---|
 | `GET /status` | Snapshot |
+| `GET /status/at?start=&end=` | The snapshot as it was during a past period (ms timestamps) |
 | `GET /history?range=24h\|7d` | Score history |
 | `GET /services/:key/history` | Samples of one service |
 | `POST /run`, `POST /run/:key` | On-demand runs, rate limited |

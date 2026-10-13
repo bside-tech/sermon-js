@@ -51,6 +51,7 @@ export type StatusHandlerOptions = {
 export type StatusHandler = (request: Request, context?: HandlerContext) => Promise<Response>;
 
 const RUN_ALL_LOCK = "sermon:run:all";
+const MAX_PERIOD_MS = Math.max(...Object.values(RANGES).map((range) => range.durationMs));
 
 function parseRange(value: string | null): HistoryRange {
   return value && value in RANGES ? (value as HistoryRange) : "24h";
@@ -77,6 +78,7 @@ function presentedSecret(request: Request, url: URL) {
  *
  * Routes (under `basePath`):
  * - `GET  /status`                 snapshot: tree, latest results, statistics, score
+ * - `GET  /status/at?start=&end=`  the page as it was during a past period (ms timestamps)
  * - `GET  /history?range=24h|7d`   score history
  * - `GET  /services/:key/history`  samples of one service
  * - `POST /run`                    run everything now (rate limited)
@@ -174,6 +176,16 @@ export function createStatusHandler(status: Status, options: StatusHandlerOption
       if (method === "GET" && first === "status" && segments.length === 1) {
         if (options.refreshOnRead) await refreshIfStale(context);
         return json(request, await status.snapshot(), { headers: cached(cache?.status) });
+      }
+
+      if (method === "GET" && first === "status" && second === "at" && segments.length === 2) {
+        const start = Number(url.searchParams.get("start"));
+        const end = Number(url.searchParams.get("end"));
+        // A period is at most the longest history range, and only whole milliseconds
+        const valid =
+          Number.isSafeInteger(start) && Number.isSafeInteger(end) && start >= 0 && end > start && end - start <= MAX_PERIOD_MS;
+        if (!valid) return json(request, { error: "Invalid period: pass start and end as ms timestamps" }, { status: 400 });
+        return json(request, await status.snapshotAt({ start, end }), { headers: cached(cache?.history) });
       }
 
       if (method === "GET" && first === "history" && segments.length === 1) {

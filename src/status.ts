@@ -11,6 +11,7 @@ import type {
   CheckResult,
   HistoryPayload,
   HistoryRange,
+  Instance,
   ScoreLabel,
   ServiceStats,
   SnapshotNode,
@@ -76,6 +77,12 @@ export type Status = {
   tick(options?: { force?: boolean }): Promise<TickResult>;
   /** Everything a status page needs: the tree with latest results, statistics and the score */
   snapshot(): Promise<StatusSnapshot>;
+  /**
+   * The page as it was during a past period (typically one history bar): each service shows
+   * its worst result of the period, with the error and per-instance statuses recorded then.
+   * Metrics, usage and statistics are not kept per run, so they are absent.
+   */
+  snapshotAt(period: { start: number; end: number }): Promise<StatusSnapshot>;
   /** Score history in fixed buckets */
   history(options?: { range?: HistoryRange }): Promise<HistoryPayload>;
   /** Raw samples of one service */
@@ -99,6 +106,9 @@ export type Status = {
   readonly scoring: Scoring;
   readonly warnings: readonly string[];
 };
+
+const SAMPLE_SEVERITY: Record<CheckSample["status"], number> = { unconfigured: 0, sleeping: 1, up: 2, degraded: 3, down: 4 };
+const LABEL_SEVERITY: Record<ScoreLabel, number> = { unknown: 0, operational: 1, degraded: 2, outage: 3 };
 
 const TICK_LOCK = "sermon:tick";
 const STATS_KEY = "sermon:stats";
@@ -345,6 +355,92 @@ export function defineStatus(config: StatusConfig): Status {
         retentionMs,
         ...scoreOf(latest),
         tree: tree.map(toSnapshot),
+      };
+    },
+
+    async snapshotAt({ start, end }) {
+      const at = now();
+      const range = { since: start, until: end };
+      const keys = [...services.keys()];
+      const [runs, latest, ...sampleLists] = await Promise.all([
+        store.runs(range),
+        currentLatest(),
+        ...keys.map((key) => store.samples(key, range)),
+      ]);
+
+      // The worst sample of each service in the period; among equals, the most recent
+      const results: Record<string, CheckResult> = {};
+      keys.forEach((key, index) => {
+        let worst: CheckSample | undefined;
+        for (const sample of sampleLists[index] ?? []) {
+          if (!worst || SAMPLE_SEVERITY[sample.status] >= SAMPLE_SEVERITY[worst.status]) worst = sample;
+        }
+        if (!worst) return;
+        // Samples only keep each instance's status and latency: names come from the latest result
+        const known = new Map((latest[key]?.instances ?? []).map((instance) => [instance.key, instance]));
+        results[key] = {
+          key,
+          status: worst.status,
+          checkedAt: worst.at,
+          probed: worst.status !== "sleeping",
+          latencyMs: worst.latencyMs,
+          httpStatus: worst.httpStatus,
+          error: worst.error,
+          instances: worst.instances
+            ? Object.entries(worst.instances).map(([instanceKey, [status, latencyMs]]) => ({
+                key: instanceKey,
+                region: known.get(instanceKey)?.region,
+                id: known.get(instanceKey)?.id,
+                status: status as Instance["status"],
+                latencyMs,
+              }))
+            : undefined,
+          instanceLabels: worst.instances ? latest[key]?.instanceLabels : undefined,
+        };
+      });
+
+      const toSnapshot = (node: ResolvedNode): SnapshotNode => {
+        if (node.type === "group") {
+          return { type: "group", key: node.key, title: node.title, description: node.description, children: node.children.map(toSnapshot) };
+        }
+        const service = services.get(node.key)!;
+        return {
+          type: "service",
+          key: service.key,
+          kind: service.kind,
+          name: service.name,
+          description: service.description,
+          critical: service.critical,
+          slowMs: service.slowMs,
+          // What was recorded then is what counts, not whether the service is configured now
+          configured: !!results[service.key],
+          result: results[service.key],
+        };
+      };
+
+      // Same figure as the history bar of this period: the worst score among its runs
+      const computed = scoreOf(results);
+      const scores = runs.map((run) => run.score).filter((score): score is number => score !== null);
+      const score = scores.length ? Math.min(...scores) : computed.score;
+      const label = runs.length
+        ? runs.map((run) => run.label).reduce((a, b) => (LABEL_SEVERITY[b] > LABEL_SEVERITY[a] ? b : a))
+        : computed.label;
+      const checkedAts = Object.values(results).map((result) => result.checkedAt);
+      const lastRun = runs[runs.length - 1];
+      return {
+        schemaVersion: 1,
+        generatedAt: at,
+        lastCheckedAt: checkedAts.length ? Math.max(...checkedAts) : null,
+        lastRunAt: lastRun?.at ?? null,
+        lastRunTrigger: lastRun?.trigger ?? null,
+        nextDueAt: null,
+        intervalMs,
+        retentionMs,
+        ...computed,
+        score,
+        label,
+        tree: tree.map(toSnapshot),
+        period: { start, end, runs: runs.length },
       };
     },
 
