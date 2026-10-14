@@ -312,7 +312,7 @@ describe("<StatusPage>", () => {
     expect(bars[0]!.getAttribute("aria-pressed")).toBe("true");
     expect(bars[0]!.className).not.toMatch(/opacity-/);
     expect(bars[0]!.className).not.toMatch(/ring-foreground/);
-    expect(bars[1]!.className).toMatch(/opacity-30/);
+    expect(bars[1]!.className).toMatch(/opacity-30 grayscale/);
     expect(screen.getByText(/^Selected: /)).toBeTruthy();
 
     // The rest of the page still shows the present
@@ -324,7 +324,7 @@ describe("<StatusPage>", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to live" }));
     await waitFor(() => expect(screen.queryByText("What was failing")).toBeNull());
     expect(screen.queryByText(/^Selected: /)).toBeNull();
-    expect(bars[1]!.className).not.toMatch(/opacity-/);
+    expect(bars[1]!.className).not.toMatch(/opacity-|grayscale/);
 
     // Clicking the selected bar again also clears the selection
     fireEvent.click(bars[0]!);

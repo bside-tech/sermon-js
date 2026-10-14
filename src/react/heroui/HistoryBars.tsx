@@ -118,9 +118,12 @@ export function HistoryBars({
           return (
           <div
             key={bar.start}
-            className={`relative h-full flex-1 overflow-hidden rounded-sm bg-default transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+            className={`relative h-full flex-1 overflow-hidden rounded-sm bg-default transition-[opacity,filter] outline-none focus-visible:ring-2 focus-visible:ring-focus ${
               clickable ? "cursor-pointer" : "cursor-default"
-            } ${lit(index) ? "" : selectedIndex >= 0 && hovered !== index ? "opacity-30" : "opacity-50"}`}
+            } ${
+              // With a selection the other bars also lose their color, so only the selected one reads as data
+              lit(index) ? "" : selectedIndex >= 0 ? "opacity-30 grayscale" : "opacity-50"
+            }`}
             onMouseEnter={() => setHovered(index)}
             {...(clickable
               ? {
