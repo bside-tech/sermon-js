@@ -41,7 +41,7 @@ links, a stale-data warning and a theme switch. See [`examples/vite`](../example
 
 ### Looking at the past
 
-Click a history bar to select it: the other bars dim, a strip under the chart names the
+Hover a bar for its details (time, score, failing services) in a tooltip. Click it to select it: the other bars dim and lose their color, a strip under the chart names the
 period with a "Back to live" link, and a **What was failing** section appears right below
 the main card. It lists every service that was down or degraded in that period, with the
 error and per-region statuses recorded then (the worst result of each service when the period

@@ -315,6 +315,18 @@ describe("<StatusPage>", () => {
     expect(bars[1]!.className).toMatch(/opacity-30 grayscale/);
     expect(screen.getByText(/^Selected: /)).toBeTruthy();
 
+    // Hovering a bar shows its details in a tooltip, with the services that were failing
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.mouseEnter(bars[0]!);
+    const tooltip = screen.getByRole("tooltip");
+    expect(within(tooltip).getByText(/Major outage/)).toBeTruthy();
+    expect(within(tooltip).getByLabelText("API: down")).toBeTruthy();
+    expect(within(tooltip).getByText("Selected · click to go back to live")).toBeTruthy();
+    fireEvent.mouseEnter(bars[1]!);
+    expect(within(screen.getByRole("tooltip")).getByText("Click to see what was failing")).toBeTruthy();
+    fireEvent.mouseLeave(bars[1]!.parentElement!);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+
     // The rest of the page still shows the present
     expect(screen.getByText("All systems operational")).toBeTruthy();
     expect(within(api()).getByText("Operational")).toBeTruthy();
