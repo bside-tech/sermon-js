@@ -356,4 +356,58 @@ describe("<StatusPage>", () => {
     fireEvent.click(bars[1]!);
     await screen.findByText("Nothing was failing in this period.");
   });
+
+  describe("with access control", () => {
+    async function render2({ signedIn }: { signedIn: boolean }) {
+      const status = defineStatus({
+        services: [
+          group({
+            title: "Our services",
+            services: [
+              custom({ name: "API", critical: true, check: () => ({ status: "down", error: "HTTP 500: boom" }) }),
+              custom({ name: "Worker", check: () => true }),
+            ],
+          }),
+          group({ title: "Providers", services: [custom({ name: "VendorX", check: () => true })] }),
+        ],
+      });
+      await status.run({ trigger: "scheduled" });
+      const handler = createStatusHandler(status, {
+        cache: false,
+        access: (request) =>
+          request.headers.get("x-test-session") === "staff" ? { full: true, name: "ana@line.test" } : { full: false },
+        signInUrl: "https://auth.test/signin",
+      });
+      // A browser sends its session cookie by itself; the simulated one refuses to set "cookie" by hand
+      const client = createStatusClient({
+        baseUrl: "https://status.test/api",
+        fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
+          handler(new Request(String(input), { ...init, headers: signedIn ? { "x-test-session": "staff" } : {} }))) as typeof fetch,
+      });
+      render(<StatusPage client={client} queryClient={new QueryClient({ defaultOptions: { queries: { retry: false } } })} />);
+      await screen.findByText("Major outage");
+    }
+
+    it("shows anonymous viewers one row per group and a way to sign in", async () => {
+      await render2({ signedIn: false });
+      expect(screen.getByText("Our services")).toBeTruthy();
+      expect(screen.getByText("Providers")).toBeTruthy();
+      expect(screen.getByText("Down")).toBeTruthy();
+      for (const hidden of ["API", "Worker", "VendorX", "HTTP 500: boom"]) expect(screen.queryByText(hidden)).toBeNull();
+      expect(screen.queryByRole("button", { name: /Run all checks/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /Check .* now/ })).toBeNull();
+      expect(screen.queryByRole("navigation", { name: "Tracked services" })).toBeNull();
+      const links = screen.getAllByRole("link", { name: "Sign in" });
+      expect(links.every((link) => link.getAttribute("href") === "https://auth.test/signin")).toBe(true);
+      expect(screen.getByText(/to see every service and its details/)).toBeTruthy();
+    });
+
+    it("shows signed-in viewers everything", async () => {
+      await render2({ signedIn: true });
+      expect(screen.getByText("Signed in as ana@line.test")).toBeTruthy();
+      expect(screen.getByText("HTTP 500: boom")).toBeTruthy();
+      expect(screen.getByRole("button", { name: /Run all checks/ })).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+    });
+  });
 });

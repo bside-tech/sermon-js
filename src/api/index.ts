@@ -1,7 +1,20 @@
 import { toMs, type Duration } from "../duration";
 import { RANGES } from "../history";
 import type { Status } from "../status";
-import type { HistoryRange } from "../types";
+import type { ResolvedNode } from "../config";
+import type { HistoryRange, ServiceSnapshot, SnapshotNode } from "../types";
+import { toPublicHistory, toPublicSnapshot, type View } from "../visibility";
+
+/** Who is looking, as decided by your `access` function */
+export type Viewer = {
+  /** Show everything (true), or only the public essentials (false) */
+  full: boolean;
+  /** Shown on the page for a signed-in viewer, e.g. their email */
+  name?: string;
+};
+
+/** What `GET /viewer` answers: the page asks it first, to know which view to request */
+export type ViewerPayload = { view: View; name?: string; signInUrl?: string };
 
 export type HandlerContext = {
   /** Keeps the platform alive for background work after the response (Workers, Vercel, Netlify…) */
@@ -46,15 +59,48 @@ export type StatusHandlerOptions = {
    * connection strings: don't print it. Default: `console.error` of `message` only.
    */
   onError?: (failure: { message: string; error: unknown }) => void;
+  /**
+   * Split the page into a public view and a full one. Called with the request (cookies,
+   * headers) when a viewer asks for the full view; return `{ full: true }` to show everything.
+   * Without it, everyone sees everything.
+   *
+   * Public responses never depend on who asks, so CDNs can cache them; full responses are
+   * marked private and never shared. On-demand runs and per-service history need full access.
+   */
+  access?: (request: Request) => Viewer | Promise<Viewer>;
+  /** Where anonymous viewers can sign in, shown on the public page */
+  signInUrl?: string | ((request: Request) => string | undefined);
 };
 
 export type StatusHandler = (request: Request, context?: HandlerContext) => Promise<Response>;
 
 const RUN_ALL_LOCK = "sermon:run:all";
+/** For responses that depend on who asks: never stored by a browser or shared by a CDN */
+const PRIVATE: Record<string, string> = { "cache-control": "private, no-store" };
 const MAX_PERIOD_MS = Math.max(...Object.values(RANGES).map((range) => range.durationMs));
 
 function parseRange(value: string | null): HistoryRange {
   return value && value in RANGES ? (value as HistoryRange) : "24h";
+}
+
+/** The configured tree with just what the public history needs: groups, keys and criticality */
+function outline(status: Status): SnapshotNode[] {
+  const walk = (nodes: readonly ResolvedNode[]): SnapshotNode[] =>
+    nodes.map((node) => {
+      if (node.type === "group") return { type: "group", key: node.key, title: node.title, children: walk(node.children) };
+      const service = status.services.get(node.key)!;
+      const row: ServiceSnapshot = {
+        type: "service",
+        key: node.key,
+        kind: service.kind,
+        name: service.name,
+        critical: service.critical,
+        slowMs: service.slowMs,
+        configured: service.missing.length === 0,
+      };
+      return row;
+    });
+  return walk(status.tree);
 }
 
 /** Constant-time comparison, so the secret can't be guessed byte by byte from response times */
@@ -77,6 +123,7 @@ function presentedSecret(request: Request, url: URL) {
  * it with `toNodeListener` for plain Node servers.
  *
  * Routes (under `basePath`):
+ * - `GET  /viewer`                 who is looking: `{ view: "full" | "public", name?, signInUrl? }`
  * - `GET  /status`                 snapshot: tree, latest results, statistics, score
  * - `GET  /status/at?start=&end=`  the page as it was during a past period (ms timestamps)
  * - `GET  /history?range=24h|7d`   score history
@@ -152,6 +199,19 @@ export function createStatusHandler(status: Status, options: StatusHandlerOption
     await Promise.race([tick, new Promise((resolve) => setTimeout(resolve, refreshBudgetMs))]);
   }
 
+  /** Who is asking. A failing `access` function means "public", never an error page. */
+  async function viewerOf(request: Request): Promise<Viewer> {
+    if (!options.access) return { full: true };
+    try {
+      return await options.access(request);
+    } catch (error) {
+      const message = status.redact(describeError(error));
+      if (options.onError) options.onError({ message, error });
+      else console.error(`[sermon-js] access check failed: ${message}`);
+      return { full: false };
+    }
+  }
+
   return async function handle(request, context) {
     const url = new URL(request.url);
     const method = request.method.toUpperCase();
@@ -172,10 +232,34 @@ export function createStatusHandler(status: Status, options: StatusHandlerOption
     }
     const [first, second, third] = segments;
 
+    // With an access check, the full view is only computed for requests that ask for it
+    // (`?view=full`), so the URL alone decides whether a response may be shared by a CDN
+    const split = !!options.access;
+    const wantsFull = url.searchParams.get("view") === "full";
+    let viewer: Viewer | undefined;
+    const isFull = async () => !split || (wantsFull && (viewer ??= await viewerOf(request)).full);
+    /** Cache headers for a read: shared when anyone may see it, private when it depends on the viewer */
+    const readHeaders = (seconds: number | undefined) => (split && wantsFull ? PRIVATE : cached(seconds));
+    const forbidden = () => json(request, { error: "Sign in to see this" }, { status: 403, headers: PRIVATE });
+
     try {
+      if (method === "GET" && first === "viewer" && segments.length === 1) {
+        const who = await viewerOf(request);
+        const signInUrl = typeof options.signInUrl === "function" ? options.signInUrl(request) : options.signInUrl;
+        const payload: ViewerPayload = {
+          view: who.full ? "full" : "public",
+          name: who.full ? who.name : undefined,
+          signInUrl: who.full ? undefined : signInUrl,
+        };
+        return json(request, payload, { headers: PRIVATE });
+      }
+
       if (method === "GET" && first === "status" && segments.length === 1) {
         if (options.refreshOnRead) await refreshIfStale(context);
-        return json(request, await status.snapshot(), { headers: cached(cache?.status) });
+        const snapshot = await status.snapshot();
+        return json(request, (await isFull()) ? snapshot : toPublicSnapshot(snapshot), {
+          headers: readHeaders(cache?.status),
+        });
       }
 
       if (method === "GET" && first === "status" && second === "at" && segments.length === 2) {
@@ -185,33 +269,41 @@ export function createStatusHandler(status: Status, options: StatusHandlerOption
         const valid =
           Number.isSafeInteger(start) && Number.isSafeInteger(end) && start >= 0 && end > start && end - start <= MAX_PERIOD_MS;
         if (!valid) return json(request, { error: "Invalid period: pass start and end as ms timestamps" }, { status: 400 });
-        return json(request, await status.snapshotAt({ start, end }), { headers: cached(cache?.history) });
+        const snapshot = await status.snapshotAt({ start, end });
+        return json(request, (await isFull()) ? snapshot : toPublicSnapshot(snapshot), {
+          headers: readHeaders(cache?.history),
+        });
       }
 
       if (method === "GET" && first === "history" && segments.length === 1) {
         const range = parseRange(url.searchParams.get("range"));
-        return json(request, await status.history({ range }), { headers: cached(cache?.history) });
+        const history = await status.history({ range });
+        if (await isFull()) return json(request, history, { headers: readHeaders(cache?.history) });
+        return json(request, toPublicHistory(history, outline(status)), { headers: readHeaders(cache?.history) });
       }
 
       if (method === "GET" && first === "services" && second && third === "history" && segments.length === 3) {
+        if (!(await isFull())) return forbidden();
         if (!status.has(second)) return json(request, { error: "Unknown service" }, { status: 404 });
         const range = parseRange(url.searchParams.get("range"));
         return json(request, await status.serviceHistory(second, { range }), { headers: cached(cache?.history) });
       }
 
       if (method === "POST" && first === "run" && segments.length === 1) {
+        if (!(await isFull())) return forbidden();
         const lock = await status.lock(RUN_ALL_LOCK, runAllMs);
         if (!lock.ok) return tooSoon(request, "A full run happened recently", lock.retryAfterMs);
         await status.run({ trigger: "manual" });
-        return json(request, await status.snapshot());
+        return json(request, await status.snapshot(), { headers: PRIVATE });
       }
 
       if (method === "POST" && first === "run" && second && segments.length === 2) {
+        if (!(await isFull())) return forbidden();
         if (!status.has(second)) return json(request, { error: "Unknown service" }, { status: 404 });
         const lock = await status.lock(`sermon:run:${second}`, runOneMs);
         if (!lock.ok) return tooSoon(request, "This service was checked recently", lock.retryAfterMs);
         await status.run({ keys: [second], trigger: "manual" });
-        return json(request, await status.snapshot());
+        return json(request, await status.snapshot(), { headers: PRIVATE });
       }
 
       // "/cron" is kept as an alias for schedulers configured before "/tick" existed

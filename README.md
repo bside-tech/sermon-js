@@ -181,6 +181,7 @@ createStatusHandler(status, {
 
 | Route | |
 |---|---|
+| `GET /viewer` | Who is looking: `{ view: "full" \| "public", name?, signInUrl? }` |
 | `GET /status` | Snapshot |
 | `GET /status/at?start=&end=` | The snapshot as it was during a past period (ms timestamps) |
 | `GET /history?range=24h\|7d` | Score history |
@@ -189,6 +190,33 @@ createStatusHandler(status, {
 | `GET\|POST /tick` | Run if due, for schedulers |
 
 For plain Node servers: `http.createServer(toNodeListener(handler))`.
+
+### Public and full views
+
+Show everyone the essentials and only your team the details:
+
+```ts
+createStatusHandler(status, {
+  // Called with the request (cookies, headers): decide who sees everything
+  access: async (request) => {
+    const user = await getSignedInUser(request);           // your auth
+    return user?.email.endsWith("@acme.com") ? { full: true, name: user.email } : { full: false };
+  },
+  signInUrl: "https://app.acme.com/signin?callbackUrl=https://status.acme.com/",
+});
+```
+
+- **Public view** (anyone): the overall score, the history chart, and one row per top-level
+  group with its status. A group is down when one of its critical services is down, degraded
+  when anything else in it is wrong. No service names, providers, errors, timings, machines or
+  usage leave the server, and history bars name groups instead of services.
+- **Full view**: everything, as without `access`. The page asks `GET /viewer` first, then
+  requests `?view=full`; the server grants it only when `access` says so.
+- **Caching**: public responses never depend on cookies, so CDNs may share them. Full
+  responses are `private, no-store`. A failing `access` function means the public view.
+- **Runs and per-service history** need the full view (403 otherwise).
+- `StatusPage` handles all of this: it shows a "Sign in" link to anonymous viewers and
+  "Signed in as …" to the others.
 
 ## Stores
 

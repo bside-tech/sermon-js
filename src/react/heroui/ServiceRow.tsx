@@ -16,6 +16,8 @@ export const KitOptions = createContext<{
   allowRuns: boolean;
   /** Rows show results of a past period: no on-demand runs and no present-day statistics */
   historical?: boolean;
+  /** Rows are the public components (top-level groups): name, status and description only */
+  publicView?: boolean;
 }>({
   regionNames: FLY_REGIONS,
   allowRuns: true,
@@ -45,7 +47,7 @@ export function ServiceRow({
   anchor?: boolean;
 }) {
   const run = useRunChecks();
-  const { regionNames, allowRuns, historical = false } = useContext(KitOptions);
+  const { regionNames, allowRuns, historical = false, publicView = false } = useContext(KitOptions);
   const status = statusOf(service);
   const tone = STATUS_TONE[status];
   const { result, stats } = service;
@@ -81,7 +83,7 @@ export function ServiceRow({
             <p className="text-xs text-muted">Missing: {service.missing.join(", ")}</p>
           )}
         </div>
-        {allowRuns && !historical && (
+        {allowRuns && !historical && !publicView && (
           <div className="flex items-center gap-2">
             {rateLimited && <span className="text-xs text-muted">wait {rateLimited.retryAfter}s</span>}
             <Button
@@ -99,7 +101,7 @@ export function ServiceRow({
         )}
       </div>
 
-      {service.configured && (
+      {service.configured && !publicView && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pl-5.5">
           <Stat label="Response" value={result?.probed === false ? "not probed" : formatMs(result?.latencyMs)} />
           {/* Statistics describe the last 24 hours and 7 days from now: they don't belong to a past period */}

@@ -28,6 +28,8 @@ export type { Scoring, ScoringInput } from "./score";
 
 export { bucketFor, bucketRuns, computeServiceStats, RANGES } from "./history";
 export { collectSecretValues, sanitizeError } from "./sanitize";
+export { componentOf, componentStatus, toPublicHistory, toPublicSnapshot, UNGROUPED_COMPONENT } from "./visibility";
+export type { View } from "./visibility";
 export { combine, createHttp, errorMessage, measure } from "./probe";
 export { toMs } from "./duration";
 export type { Duration } from "./duration";

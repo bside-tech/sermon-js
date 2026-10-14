@@ -174,6 +174,12 @@ export type Trigger = "scheduled" | "manual";
 
 export type StatusSnapshot = {
   schemaVersion: 1;
+  /**
+   * "public" when the snapshot was reduced for an anonymous viewer: the tree then holds one row
+   * per top-level group (services of kind "group") and nothing about individual services.
+   * Absent or "full" otherwise.
+   */
+  view?: "full" | "public";
   generatedAt: number;
   /** Most recent check of any service */
   lastCheckedAt: number | null;

@@ -30,7 +30,13 @@ export function useStatusClient(): StatusClient {
 /** The snapshot, refreshed periodically (default every 30 s) */
 export function useStatus({ refetchInterval = 30_000 }: { refetchInterval?: number | false } = {}) {
   const client = useStatusClient();
-  return useQuery({ queryKey: ["sermon", "status"], queryFn: () => client.status(), refetchInterval });
+  return useQuery({ queryKey: ["sermon", client.view, "status"], queryFn: () => client.status(), refetchInterval });
+}
+
+/** Who is looking (full or public view, name, sign-in link) */
+export function useViewer() {
+  const client = useStatusClient();
+  return useQuery({ queryKey: ["sermon", "viewer"], queryFn: () => client.viewer(), staleTime: 60_000 });
 }
 
 /**
@@ -40,7 +46,7 @@ export function useStatus({ refetchInterval = 30_000 }: { refetchInterval?: numb
 export function useStatusAt(period: { start: number; end: number } | null) {
   const client = useStatusClient();
   return useQuery({
-    queryKey: ["sermon", "status-at", period?.start, period?.end],
+    queryKey: ["sermon", client.view, "status-at", period?.start, period?.end],
     queryFn: () => client.statusAt(period!),
     enabled: period !== null,
     placeholderData: keepPreviousData,
@@ -52,7 +58,7 @@ export function useStatusAt(period: { start: number; end: number } | null) {
 /** The score history for a range */
 export function useHistory(range: HistoryRange, { refetchInterval = 60_000 }: { refetchInterval?: number | false } = {}) {
   const client = useStatusClient();
-  return useQuery({ queryKey: ["sermon", "history", range], queryFn: () => client.history(range), refetchInterval });
+  return useQuery({ queryKey: ["sermon", client.view, "history", range], queryFn: () => client.history(range), refetchInterval });
 }
 
 /**
@@ -65,8 +71,8 @@ export function useRunChecks() {
   return useMutation({
     mutationFn: (key?: string | void) => client.run(key || undefined),
     onSuccess: (snapshot) => {
-      queryClient.setQueryData(["sermon", "status"], snapshot);
-      void queryClient.invalidateQueries({ queryKey: ["sermon", "history"] });
+      queryClient.setQueryData(["sermon", client.view, "status"], snapshot);
+      void queryClient.invalidateQueries({ queryKey: ["sermon", client.view, "history"] });
     },
   });
 }
