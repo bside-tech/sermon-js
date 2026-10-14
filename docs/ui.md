@@ -41,11 +41,12 @@ links, a stale-data warning and a theme switch. See [`examples/vite`](../example
 
 ### Looking at the past
 
-Click a history bar and the whole page shows that period instead of the present: the score,
-the counts, and for every service its worst result of the period, with the error and the
-per-region statuses recorded then. Sections that had a failing service open by themselves. A
-notice stays in view with the period and a "Back to live" button; clicking the bar again does
-the same.
+Click a history bar to select it: the other bars dim, a strip under the chart names the
+period with a "Back to live" link, and a **What was failing** section appears right below
+the main card. It lists every service that was down or degraded in that period, with the
+error and per-region statuses recorded then (the worst result of each service when the period
+holds several runs). The rest of the page keeps showing the present. Clicking the bar again
+clears the selection.
 
 Only what is stored per run can be shown: status, response time, HTTP status, error and
 per-instance status. Usage bars, metrics and the 24-hour statistics describe the present and
@@ -120,11 +121,11 @@ function Dashboard() {
 
 Components: `StatusPage`, `ScoreHeader`, `ScoreRing`, `HistoryBars`, `ServiceSection`,
 `ServiceRow`, `ServiceNav`, `InstanceTable`, `UsageBar`, `Sparkline`, `RunAllButton`,
-`ThemeSwitcher`, `StaleNotice`, `PeriodNotice`.
+`ThemeSwitcher`, `StaleNotice`, `FailingServices`.
 
 When you compose your own page, `HistoryBars` takes `selected` and `onSelect` (bars are only
-clickable with `onSelect`), `useStatusAt(period)` loads the past snapshot, and
-`KitOptions` takes `historical: true` to hide on-demand runs and present-only statistics.
+clickable with `onSelect`), and `<FailingServices period={…} />` renders the "What was
+failing" section for it. `useStatusAt(period)` gives you the whole past snapshot.
 
 ## Headless: `sermon-js/react`
 

@@ -58,9 +58,3 @@ export const AlertIcon = (props: IconProps) => (
     <path d="M12 9v4m0 4h.01M10.4 3.6L2.3 17.2a1.9 1.9 0 0 0 1.6 2.9h16.2a1.9 1.9 0 0 0 1.6-2.9L13.6 3.6a1.9 1.9 0 0 0-3.2 0" />
   </Icon>
 );
-
-export const ClockIcon = (props: IconProps) => (
-  <Icon {...props}>
-    <path d="M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18m0-14v5l3 2" />
-  </Icon>
-);

@@ -29,7 +29,7 @@ export function HistoryBars({
 }: {
   /** Service names by key, to label failures */
   names?: Record<string, string>;
-  /** The period currently shown by the page, if any: its bar is highlighted */
+  /** The selected period, if any: its bar stays lit while the others dim, and a strip below the chart names it */
   selected?: HistoryPeriod | null;
   /** Makes bars clickable: called with a bar's period, or `null` when the selected bar is clicked again */
   onSelect?: (period: HistoryPeriod | null) => void;
@@ -61,7 +61,9 @@ export function HistoryBars({
   const active =
     (hovered !== null && bars[hovered]) || (selectedIndex >= 0 && bars[selectedIndex]) || bars.findLast((bar) => bar.runs > 0);
   const avg = average(bars);
-  const dimmedBy = hovered ?? (selectedIndex >= 0 ? selectedIndex : null);
+  // The selected bar stays lit and the others dim; without a selection, hovering does the same
+  const lit = (index: number) =>
+    selectedIndex >= 0 ? index === selectedIndex || index === hovered : hovered === null || index === hovered;
   const toggle = (bar: HistoryBar, index: number) => {
     if (!onSelect || bar.runs === 0) return;
     // Periods are inclusive: stop just before the next bar starts
@@ -118,9 +120,7 @@ export function HistoryBars({
             key={bar.start}
             className={`relative h-full flex-1 overflow-hidden rounded-sm bg-default transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-focus ${
               clickable ? "cursor-pointer" : "cursor-default"
-            } ${dimmedBy !== null && dimmedBy !== index ? "opacity-50" : ""} ${
-              index === selectedIndex ? "ring-2 ring-foreground" : ""
-            }`}
+            } ${lit(index) ? "" : selectedIndex >= 0 && hovered !== index ? "opacity-30" : "opacity-50"}`}
             onMouseEnter={() => setHovered(index)}
             {...(clickable
               ? {
@@ -129,7 +129,7 @@ export function HistoryBars({
                   "aria-pressed": index === selectedIndex,
                   "aria-label": `${formatDateTime(bar.start)}: ${
                     bar.score === null ? "no data" : `score ${bar.score}`
-                  }. Show the page at this time`,
+                  }. Show what was failing at this time`,
                   onClick: () => toggle(bar, index),
                   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
                     if (event.key !== "Enter" && event.key !== " ") return;
@@ -156,6 +156,24 @@ export function HistoryBars({
         <span>Now</span>
       </div>
 
+      {selected && onSelect && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg bg-foreground px-3 py-1.5 text-sm text-background"
+        >
+          <span className="font-medium">
+            Selected: {formatDateTime(selected.start)} – {formatDateTime(selected.end + 1)}
+          </span>
+          <button
+            type="button"
+            className="cursor-pointer rounded px-1.5 py-0.5 text-xs font-medium underline underline-offset-2 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-background"
+            onClick={() => onSelect(null)}
+          >
+            Back to live
+          </button>
+        </div>
+      )}
+
       <div className="min-h-10 rounded-lg bg-surface-secondary px-3 py-2 text-xs">
         {active ? (
           <div className="flex flex-col gap-1">
@@ -168,8 +186,8 @@ export function HistoryBars({
               {onSelect && active.runs > 0 && (
                 <span className="ml-auto text-muted">
                   {selectedIndex >= 0 && bars[selectedIndex] === active
-                    ? "Shown below · click again for live"
-                    : "Click to show the page at this time"}
+                    ? "Selected · details below"
+                    : "Click to see what was failing"}
                 </span>
               )}
             </div>

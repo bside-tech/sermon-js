@@ -1,10 +1,10 @@
 import { Button, Card, Disclosure, Tooltip } from "@heroui/react";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ServiceSnapshot } from "../../types";
 import { FOCUS_EVENT, groupAnchor, serviceAnchor, type FocusDetail } from "../anchors";
 import { STATUS_TEXT, STATUS_TONE } from "../format";
 import { servicesOf, statusOf, type Section } from "../tree";
-import { KitOptions, ServiceRow } from "./ServiceRow";
+import { ServiceRow } from "./ServiceRow";
 import { TONE_BG } from "./tones";
 
 /** Collapsed sections are a per-viewer preference, kept in localStorage when available */
@@ -90,20 +90,8 @@ export function ServiceSection({
   /** Whether the section starts open for viewers who haven't chosen (default false) */
   defaultExpanded?: boolean;
 }) {
-  const [stored, setStored] = useStoredExpanded(section.key, defaultExpanded);
+  const [expanded, setExpanded] = useStoredExpanded(section.key, defaultExpanded);
   const services = useMemo(() => servicesOf(section), [section]);
-
-  // Looking at the past is looking for what went wrong: sections with a failing service open by
-  // themselves. That choice is temporary and doesn't touch the viewer's saved preference.
-  const { historical = false, periodKey } = useContext(KitOptions);
-  const failing = services.some((service) => ["down", "degraded"].includes(statusOf(service)));
-  // What the viewer toggled while looking at one period; forgotten when the period changes
-  const [override, setOverride] = useState<{ periodKey?: string; value: boolean }>();
-  const expanded = historical ? (override && override.periodKey === periodKey ? override.value : failing || stored) : stored;
-  const setExpanded = useCallback(
-    (value: boolean) => (historical ? setOverride({ periodKey, value }) : setStored(value)),
-    [historical, periodKey, setStored]
-  );
 
   // Navigating to this section, one of its groups or one of its services opens it first
   useEffect(() => {
@@ -119,7 +107,7 @@ export function ServiceSection({
   if (!services.length) return null;
 
   return (
-    <Card id={groupAnchor(section.key)} className="scroll-mt-16">
+    <Card id={groupAnchor(section.key)} className="scroll-mt-6">
       <Disclosure isExpanded={expanded} onExpandedChange={setExpanded}>
         {/* The circles have their own tooltips, so they sit beside the trigger, not inside it */}
         <Disclosure.Heading className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">

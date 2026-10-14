@@ -284,63 +284,59 @@ describe("<StatusPage>", () => {
     await screen.findByText("Could not load status: Request failed (500)");
   });
 
-  it("shows the whole page as it was when a history bar is clicked", async () => {
+  it("lists what was failing when a history bar is selected, and leaves the page live", async () => {
     await setup({ ranAgoMs: 60 * 60_000, recovered: true });
     const api = () => document.getElementById("service-our-services:api")!;
-    expect(within(api()).getByText("Operational")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Run all checks/ })).toBeTruthy();
+    expect(screen.queryByText("What was failing")).toBeNull();
 
     // Two bars hold a run: an hour ago (the outage) and now
-    const bars = await screen.findAllByRole("button", { name: /Show the page at this time/ });
+    const bars = await screen.findAllByRole("button", { name: /Show what was failing at this time/ });
     expect(bars).toHaveLength(2);
     fireEvent.click(bars[0]!);
 
-    await screen.findByText("Major outage");
+    const heading = await screen.findByText("What was failing");
+    const section = heading.closest("[aria-busy]") as HTMLElement;
+    await within(section).findByText("HTTP 500: boom");
+    // Only the service that was failing, with what was recorded then
+    expect(within(section).getByText("API")).toBeTruthy();
+    expect(within(section).getByText("Down")).toBeTruthy();
+    expect(within(section).queryByText("Web app")).toBeNull();
+    expect(within(section).queryByText("Edge")).toBeNull();
+    // The past can't be re-run, and statistics belong to the present
+    expect(within(section).queryByRole("button", { name: /Check API now/ })).toBeNull();
+    expect(within(section).queryByText("Uptime 24h")).toBeNull();
+    // The copy doesn't steal the deep-link anchor of the live row
+    expect(document.querySelectorAll('[id="service-our-services:api"]')).toHaveLength(1);
+
+    // The selected bar stays lit, the other one dims; a strip under the chart names the selection
     expect(bars[0]!.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText(/^Showing /)).toBeTruthy();
-    expect(screen.getByText(/1 run\(s\) between/)).toBeTruthy();
-    expect(within(api()).getByText("Down")).toBeTruthy();
-    expect(within(api()).getByText("HTTP 500: boom")).toBeTruthy();
-    // The past can't be re-run, and statistics and usage belong to the present
-    expect(screen.queryByRole("button", { name: /Run all checks/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Check API now/ })).toBeNull();
-    expect(within(api()).queryByText("Uptime 24h")).toBeNull();
-    expect(screen.queryByText("API requests")).toBeNull();
-    // Per-instance statuses were recorded, with the names known today
-    const edge = document.getElementById("service-our-services:regions:edge")!;
-    expect(within(edge).getByText("ams")).toBeTruthy();
-    expect(within(edge).getByText("Amsterdam")).toBeTruthy();
-    // A service that wasn't checked then
-    expect(within(document.getElementById("service-billing")!).getByText("No data")).toBeTruthy();
+    expect(bars[0]!.className).not.toMatch(/opacity-/);
+    expect(bars[0]!.className).not.toMatch(/ring-foreground/);
+    expect(bars[1]!.className).toMatch(/opacity-30/);
+    expect(screen.getByText(/^Selected: /)).toBeTruthy();
+
+    // The rest of the page still shows the present
+    expect(screen.getByText("All systems operational")).toBeTruthy();
+    expect(within(api()).getByText("Operational")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Run all checks/ })).toBeTruthy();
+    expect(within(api()).getByRole("button", { name: /Check API now/ })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Back to live" }));
-    await screen.findByText("All systems operational");
-    expect(within(api()).getByText("Operational")).toBeTruthy();
-    expect(screen.queryByText(/^Showing /)).toBeNull();
-    expect(screen.getByRole("button", { name: /Run all checks/ })).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("What was failing")).toBeNull());
+    expect(screen.queryByText(/^Selected: /)).toBeNull();
+    expect(bars[1]!.className).not.toMatch(/opacity-/);
 
-    // Clicking the selected bar again also returns to live
+    // Clicking the selected bar again also clears the selection
     fireEvent.click(bars[0]!);
-    await screen.findByText("Major outage");
+    await screen.findByText("What was failing");
     fireEvent.click(bars[0]!);
-    await screen.findByText("All systems operational");
+    await waitFor(() => expect(screen.queryByText("What was failing")).toBeNull());
   });
 
-  it("opens the sections that had a failing service when looking at the past", async () => {
-    cleanup();
-    localStorage.setItem("sermon:section:our-services", "collapsed");
+  it("says so when nothing was failing in the selected period", async () => {
     await setup({ ranAgoMs: 60 * 60_000, recovered: true });
-    const section = document.getElementById("group-our-services")!;
-    const toggle = () => within(section).getByRole("button", { name: /(Expand|Collapse) Our services/ });
-    expect(toggle().getAttribute("aria-expanded")).toBe("false");
-
-    fireEvent.click((await screen.findAllByRole("button", { name: /Show the page at this time/ }))[0]!);
-    await screen.findByText("Major outage");
-    expect(toggle().getAttribute("aria-expanded")).toBe("true");
-    // The viewer's own choice is untouched
-    expect(localStorage.getItem("sermon:section:our-services")).toBe("collapsed");
-    fireEvent.click(screen.getByRole("button", { name: "Back to live" }));
-    await screen.findByText("All systems operational");
-    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    const bars = await screen.findAllByRole("button", { name: /Show what was failing at this time/ });
+    fireEvent.click(bars[1]!);
+    await screen.findByText("Nothing was failing in this period.");
   });
 });

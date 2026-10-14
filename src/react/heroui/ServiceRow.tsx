@@ -14,10 +14,8 @@ import { TONE_BG } from "./tones";
 export const KitOptions = createContext<{
   regionNames: Record<string, string>;
   allowRuns: boolean;
-  /** The page shows a past period: no on-demand runs, no statistics, and failing sections open */
+  /** Rows show results of a past period: no on-demand runs and no present-day statistics */
   historical?: boolean;
-  /** Identifies the period shown, so per-period choices reset when it changes */
-  periodKey?: string;
 }>({
   regionNames: FLY_REGIONS,
   allowRuns: true,
@@ -38,7 +36,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * Everything known about one service: status, response time, percentiles, uptime, sparkline,
  * per-instance rows, usage bars, metrics, the current error, and a "Check now" button.
  */
-export function ServiceRow({ service }: { service: ServiceSnapshot }) {
+export function ServiceRow({
+  service,
+  anchor = true,
+}: {
+  service: ServiceSnapshot;
+  /** Give the row its deep-link id (default true). Turn off when the same service is listed twice on a page. */
+  anchor?: boolean;
+}) {
   const run = useRunChecks();
   const { regionNames, allowRuns, historical = false } = useContext(KitOptions);
   const status = statusOf(service);
@@ -54,8 +59,8 @@ export function ServiceRow({ service }: { service: ServiceSnapshot }) {
 
   return (
     <div
-      id={serviceAnchor(service.key)}
-      className={`flex scroll-mt-16 flex-col gap-3 py-4 ${service.configured ? "" : "opacity-60"}`}
+      id={anchor ? serviceAnchor(service.key) : undefined}
+      className={`flex scroll-mt-6 flex-col gap-3 py-4 ${service.configured ? "" : "opacity-60"}`}
     >
       <div className="flex flex-wrap items-start gap-3">
         <span className={`mt-1.5 size-2.5 shrink-0 rounded-full ${TONE_BG[tone]}`} aria-hidden />

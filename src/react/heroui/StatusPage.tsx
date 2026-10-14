@@ -1,12 +1,13 @@
 import { Card } from "@heroui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { currentAnchor, focusAnchor } from "../anchors";
 import type { StatusClient } from "../client";
 import { formatDuration } from "../format";
-import { StatusProvider, useStatus, useStatusAt } from "../hooks";
+import { StatusProvider, useStatus } from "../hooks";
 import { buildLayout, flattenServices } from "../tree";
-import { PeriodNotice, RunAllButton, StaleNotice, ThemeSwitcher } from "./controls";
+import { RunAllButton, StaleNotice, ThemeSwitcher } from "./controls";
+import { FailingServices } from "./FailingServices";
 import { FLY_REGIONS } from "./details";
 import { HistoryBars, type HistoryPeriod } from "./HistoryBars";
 import { ScoreHeader } from "./ScoreHeader";
@@ -54,14 +55,9 @@ function Page({
   refetchInterval,
 }: StatusPageProps) {
   const status = useStatus({ refetchInterval });
-  // Clicking a history bar shows the whole page as it was during that bar
+  const snapshot = status.data;
+  // Selecting a history bar adds a "What was failing" section for that period; the rest stays live
   const [period, setPeriod] = useState<HistoryPeriod | null>(null);
-  const past = useStatusAt(period);
-  const historical = period !== null && !!past.data;
-  const snapshot = historical ? past.data : status.data;
-  const options = useContext(KitOptions);
-  const periodKey = period ? `${period.start}-${period.end}` : undefined;
-  const kit = useMemo(() => ({ ...options, historical, periodKey }), [options, historical, periodKey]);
   const blocks = useMemo(() => (snapshot ? buildLayout(snapshot.tree, { ungroupedTitle }) : []), [snapshot, ungroupedTitle]);
   const names = useMemo(
     () => Object.fromEntries(flattenServices(snapshot?.tree ?? []).map((service) => [service.key, service.name])),
@@ -96,7 +92,7 @@ function Page({
       <main className="flex min-w-0 flex-1 flex-col gap-6">
         <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           {brand ?? <h1 className="text-lg font-semibold">Status</h1>}
-          {snapshot && allowRuns && !historical && <RunAllButton />}
+          {snapshot && allowRuns && <RunAllButton />}
         </header>
 
         {status.isPending && <div className="h-40 animate-pulse rounded-3xl bg-surface" />}
@@ -107,23 +103,15 @@ function Page({
         )}
 
         {snapshot && (
-          <KitOptions.Provider value={kit}>
-            {period ? (
-              <PeriodNotice period={period} loading={past.isFetching} onClear={() => setPeriod(null)} />
-            ) : (
-              <StaleNotice snapshot={snapshot} />
-            )}
-            {period && past.isError && (
-              <Card>
-                <Card.Content className="text-danger">Could not load this period: {past.error.message}</Card.Content>
-              </Card>
-            )}
+          <>
+            <StaleNotice snapshot={snapshot} />
             <Card>
               <Card.Content className="flex flex-col gap-6">
                 <ScoreHeader snapshot={snapshot} />
                 <HistoryBars names={names} selected={period} onSelect={setPeriod} />
               </Card.Content>
             </Card>
+            {period && <FailingServices period={period} />}
 
             {blocks.map((block) =>
               block.type === "section" ? (
@@ -140,7 +128,7 @@ function Page({
                 </div>
               )
             )}
-          </KitOptions.Provider>
+          </>
         )}
 
         <footer className="flex flex-wrap items-center justify-between gap-3 pb-4 text-xs text-muted">
