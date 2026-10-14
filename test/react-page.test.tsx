@@ -322,8 +322,10 @@ describe("<StatusPage>", () => {
     expect(within(tooltip).getByText(/Major outage/)).toBeTruthy();
     expect(within(tooltip).getByLabelText("API: down")).toBeTruthy();
     expect(within(tooltip).getByText("Selected · click to go back to live")).toBeTruthy();
+    // A bar where nothing failed doesn't invite a click
     fireEvent.mouseEnter(bars[1]!);
-    expect(within(screen.getByRole("tooltip")).getByText("Click to see what was failing")).toBeTruthy();
+    expect(within(screen.getByRole("tooltip")).getByText(/All systems operational/)).toBeTruthy();
+    expect(within(screen.getByRole("tooltip")).queryByText("Click to see what was failing")).toBeNull();
     fireEvent.mouseLeave(bars[1]!.parentElement!);
     expect(screen.queryByRole("tooltip")).toBeNull();
 
@@ -337,6 +339,9 @@ describe("<StatusPage>", () => {
     await waitFor(() => expect(screen.queryByText("What was failing")).toBeNull());
     expect(screen.queryByText(/^Selected: /)).toBeNull();
     expect(bars[1]!.className).not.toMatch(/opacity-|grayscale/);
+
+    fireEvent.mouseEnter(bars[0]!);
+    expect(within(screen.getByRole("tooltip")).getByText("Click to see what was failing")).toBeTruthy();
 
     // Clicking the selected bar again also clears the selection
     fireEvent.click(bars[0]!);

@@ -137,10 +137,12 @@ export function HistoryBars({
                 ))}
               </div>
             )}
-            {onSelect && tip.runs > 0 && (
-              <span className="text-muted">
-                {hovered === selectedIndex ? "Selected · click to go back to live" : "Click to see what was failing"}
-              </span>
+            {/* Nothing to announce on a bar where nothing failed */}
+            {onSelect && hovered === selectedIndex && (
+              <span className="text-muted">Selected · click to go back to live</span>
+            )}
+            {onSelect && hovered !== selectedIndex && Object.keys(tip.failing).length > 0 && (
+              <span className="text-muted">Click to see what was failing</span>
             )}
           </div>
         )}
