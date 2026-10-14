@@ -5,9 +5,17 @@ of text that leaves a check as untrusted.
 
 ## What is public
 
-Everything returned by `/status`, `/history` and `/services/:key/history`: service names,
-descriptions, statuses, latencies, `error`, `metrics`, `usage` and `instances`. Never secrets,
-URLs, headers or request bodies of a check.
+Without an `access` function on the handler: everything returned by `/status`, `/status/at`,
+`/history` and `/services/:key/history`, that is service names, descriptions, statuses,
+latencies, `error`, `metrics`, `usage` and `instances`. Never secrets, URLs, headers or
+request bodies of a check.
+
+With [`access`](../README.md#public-and-full-views), anonymous viewers only get the overall
+score, the history chart and one status per top-level group; history bars name groups, not
+services. Service details, on-demand runs and per-service history are for viewers your
+function allows. Public responses never depend on cookies (so a CDN can't serve a signed-in
+viewer's page to someone else), full responses are `private, no-store`, and an `access`
+function that throws means the public view.
 
 ## What is redacted, and where
 
@@ -32,9 +40,10 @@ is just `HTTP 401: credentials rejected`. That is where providers quote the key 
 ## Logs
 
 - The library logs two things: configuration warnings (`onWarning`, default `console.warn`)
-  and unexpected failures of the HTTP handler (`onError`, default `console.error`). The second
-  goes through the same redaction, and the raw error object is never printed: database and
-  Redis drivers put connection strings in their errors.
+  and unexpected failures of the HTTP handler, including a failing `access` function
+  (`onError`, default `console.error`). The second goes through the same redaction, and the
+  raw error object is never printed: database and Redis drivers put connection strings in
+  their errors.
 - `status.redact(text)` applies the same redaction to anything you log yourself.
 - `secrets` is a hidden (non-enumerable) property of a service, so `console.log(status)`,
   `JSON.stringify`, object spreads and error reporters that capture context don't print it.
@@ -50,6 +59,8 @@ is just `HTTP 401: credentials rejected`. That is where providers quote the key 
   non-2xx body, except 401/403). If an internal service can answer with a debug page, point
   the check at a plain health route, or set `hideResponseBodies: true` in `defineStatus`:
   failed answers are then reported by status code only (`HTTP 500`). It is off by default.
+- **If the page shouldn't tell the world which providers you use**, set `access` on the
+  handler: anonymous viewers then only see one status per top-level group.
 - **In a `custom()` check**, return short, fixed error texts rather than whole response
   bodies, and never put a secret in `metrics`.
 - **Protect `/tick` with a header**, not `?key=`: query strings end up in access logs, CDN

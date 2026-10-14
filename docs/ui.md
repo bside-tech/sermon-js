@@ -34,16 +34,17 @@ export default function App() {
 }
 ```
 
-That gives you the overall score, the history chart, collapsible sections with one status
-circle per service, per-service details (response time, percentiles, uptime, sparkline,
-per-region rows, usage bars, errors), on-demand checks, a side index on wide screens, deep
-links, a stale-data warning and a theme switch. See [`examples/vite`](../examples/vite).
+That gives you the overall score, the history chart (hover and click its bars, see below),
+collapsible sections with one status circle per service, per-service details (response time,
+percentiles, uptime, sparkline, per-region rows, usage bars, errors), on-demand checks, a side
+index on wide screens, deep links, a stale-data warning and a theme switch. See [`examples/vite`](../examples/vite).
 
 ### Looking at the past
 
-Hover a bar for its details (time, score, failing services) in a tooltip. Click it to select it: the other bars dim and lose their color, a strip under the chart names the
-period with a "Back to live" link, and a **What was failing** section appears right below
-the main card. It lists every service that was down or degraded in that period, with the
+Hover a bar for its details (time, score, failing services) in a tooltip; on a bar where
+something failed it invites a click. Click it to select it: the other bars dim and lose their
+color, a strip under the chart names the period with a "Back to live" link, and a **What was
+failing** section appears right below the main card. It lists every service that was down or degraded in that period, with the
 error and per-region statuses recorded then (the worst result of each service when the period
 holds several runs). The rest of the page keeps showing the present. Clicking the bar again
 clears the selection.
@@ -51,6 +52,19 @@ clears the selection.
 Only what is stored per run can be shown: status, response time, HTTP status, error and
 per-instance status. Usage bars, metrics and the 24-hour statistics describe the present and
 are left out.
+
+### Public and full views
+
+When the handler has an [`access`](../README.md#public-and-full-views) function, the page first
+asks `GET /viewer` who is looking (a skeleton shows meanwhile, so a signed-in viewer never sees
+the public page flash):
+
+- **Anonymous viewers** see the score, the history chart and one row per top-level group with
+  its status, then a "Sign in" link (header and under the list) to `signInUrl`. No on-demand
+  runs, no side index. The history tooltip and "What was failing" name groups, not services.
+- **Allowed viewers** see the full page, with "Signed in as …" in the header.
+
+Without `access`, everyone gets the full page, as before.
 
 Components are client components (`"use client"`), so they work in the Next.js App Router.
 
@@ -81,6 +95,8 @@ Within a section, failing services come first, then critical ones, then by name.
 | `regionNames` | Fly.io regions | City names for instance regions |
 | `refetchInterval` | `30000` | How often the page re-reads the API |
 | `queryClient` | built in | Your own React Query client |
+| `signInLabel` | `"Sign in"` | Text of the sign-in link shown to anonymous viewers |
+| `signInHint` | `"to see every service and its details."` | Line after the sign-in link under the public list |
 
 Collapsed sections and the theme are remembered per viewer in their browser
 (`localStorage`), and everything still works when storage is unavailable.
@@ -127,16 +143,39 @@ When you compose your own page, `HistoryBars` takes `selected` and `onSelect` (b
 clickable with `onSelect`), and `<FailingServices period={…} />` renders the "What was
 failing" section for it. `useStatusAt(period)` gives you the whole past snapshot.
 
+With access control on the handler, ask who is looking first and give the hooks a client for
+that view; tell the rows they show public components:
+
+```tsx
+import { useStatusClient, useViewer, StatusProvider } from "sermon-js/react";
+import { FLY_REGIONS, KitOptions } from "sermon-js/react/heroui";
+
+function WithViewer({ children }: { children: React.ReactNode }) {
+  const viewer = useViewer();
+  const base = useStatusClient();
+  if (!viewer.data) return null;
+  const view = viewer.data.view;
+  return (
+    <StatusProvider client={base.withView(view)}>
+      <KitOptions.Provider value={{ regionNames: FLY_REGIONS, allowRuns: view === "full", publicView: view === "public" }}>
+        {children}
+      </KitOptions.Provider>
+    </StatusProvider>
+  );
+}
+```
+
 ## Headless: `sermon-js/react`
 
 Needs only `react` and `@tanstack/react-query`.
 
 | | |
 |---|---|
-| `createStatusClient({ baseUrl, fetch })` | `status()`, `statusAt({ start, end })`, `history(range)`, `serviceHistory(key, range)`, `run(key?)` |
+| `createStatusClient({ baseUrl, fetch, view })` | `viewer()`, `status()`, `statusAt({ start, end })`, `history(range)`, `serviceHistory(key, range)`, `run(key?)`, `withView(view)`. `view: "full"` adds `?view=full` to every request (default `"public"`, which servers without access control ignore) |
 | `StatusProvider` | Gives the hooks a base URL or a client |
 | `useStatus()`, `useHistory(range)` | React Query queries, refreshed periodically |
 | `useStatusAt(period \| null)` | The snapshot of a past period (`{ start, end }` in ms); `null` fetches nothing |
+| `useViewer()` | Who is looking: `{ view: "full" \| "public", name?, signInUrl? }` |
 | `useRunChecks()` | Mutation: `mutate()` runs everything, `mutate(key)` one service. A refused run is a `RateLimitError` with `retryAfter` |
 | `buildLayout(tree)`, `flattenServices`, `servicesOf`, `sectionsOf` | Turn the snapshot tree into page blocks |
 | `statusOf(service)`, `sortServices` | Display status and failing-first order |
@@ -145,4 +184,6 @@ Needs only `react` and `@tanstack/react-query`.
 | `useThemePreference()`, `applyTheme()` | System / light / dark, remembered per viewer |
 | `formatMs`, `formatPct`, `formatDuration`, `timeAgo`, `STATUS_TEXT`, `STATUS_TONE`… | Display helpers |
 
-The snapshot carries `schemaVersion`, so a UI can detect an engine it doesn't understand.
+The snapshot carries `schemaVersion`, so a UI can detect an engine it doesn't understand, and
+`view: "public"` when it was reduced for an anonymous viewer: its tree then holds one row per
+top-level group (services of kind `"group"`).

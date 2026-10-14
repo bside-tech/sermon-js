@@ -6,9 +6,6 @@ Describe the services you depend on, and get checks, scoring, history, an HTTP A
 ready-made page. It runs anywhere: Node, Bun, Deno, Vercel, Netlify, Cloudflare Workers.
 No hosting assumptions, no required database.
 
-> **Status: pre-release.** Everything below is built and tested; the first npm release is
-> pending. See [Roadmap](#roadmap).
-
 ```bash
 npm install sermon-js
 ```
@@ -175,7 +172,11 @@ createStatusHandler(status, {
   secret: process.env.TICK_SECRET,   // protects /tick when set
   refreshOnRead: false,      // start a run when /status is read and data is stale
   rateLimits: { runAll: "60s", runOne: "20s" },
+  cache: { status: 10, history: 30 },   // CDN lifetimes in seconds; false to disable
   cors: false,
+  access: undefined,         // who sees the full view (see below); everyone without it
+  signInUrl: undefined,      // shown to anonymous viewers when `access` is set
+  onError: undefined,        // receives unexpected failures, already redacted
 });
 ```
 
@@ -184,10 +185,12 @@ createStatusHandler(status, {
 | `GET /viewer` | Who is looking: `{ view: "full" \| "public", name?, signInUrl? }` |
 | `GET /status` | Snapshot |
 | `GET /status/at?start=&end=` | The snapshot as it was during a past period (ms timestamps) |
-| `GET /history?range=24h\|7d` | Score history |
-| `GET /services/:key/history` | Samples of one service |
-| `POST /run`, `POST /run/:key` | On-demand runs, rate limited |
+| `GET /history?range=24h\|7d` | Score history, one bar per check interval |
+| `GET /services/:key/history` | Samples of one service (full view only, when `access` is set) |
+| `POST /run`, `POST /run/:key` | On-demand runs, rate limited (full view only, when `access` is set) |
 | `GET\|POST /tick` | Run if due, for schedulers |
+
+With `access`, add `?view=full` to any read route to ask for the full view.
 
 For plain Node servers: `http.createServer(toNodeListener(handler))`.
 
@@ -252,8 +255,9 @@ import { StatusPage } from "sermon-js/react/heroui";
 
 A complete page (score, history, collapsible sections, per-region details, usage bars,
 on-demand checks, deep links, theme switch) on HeroUI and Tailwind, plus a headless layer of
-hooks and helpers to build your own. See [UI kit](docs/ui.md) and
-[`examples/vite`](examples/vite).
+hooks and helpers to build your own. Hover a history bar for its details; click it to see
+what was failing then. With `access` on the handler, anonymous viewers get the public view
+and a "Sign in" link. See [UI kit](docs/ui.md) and [`examples/vite`](examples/vite).
 
 ## Roadmap
 
@@ -264,7 +268,10 @@ hooks and helpers to build your own. See [UI kit](docs/ui.md) and
 - [x] Presets: Fly apps (sleep-safe, per region), GCP instances, Neon projects (sleep-safe), AWS/S3/Bedrock, Statuspage, Pusher, Stripe, AI/translation/video/email/search providers, Vercel, MongoDB, Redis, PostgreSQL
 - [x] Stores: SQL (Postgres, MySQL/MariaDB, SQLite), MongoDB
 - [x] React UI kit (headless hooks + HeroUI components)
-- [ ] First npm release
+- [x] Published on npm, with provenance
+- [x] Looking at the past: what was failing during any history bar
+- [x] Public and full views, with your own sign-in
+- [ ] Examples for Next.js, Netlify and Cloudflare Workers
 
 ## License
 
