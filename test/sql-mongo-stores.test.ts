@@ -38,6 +38,28 @@ describe("sqlStore", () => {
     expect(tables.map((table) => table.name)).toEqual(["status_kv", "status_latest", "status_runs", "status_samples"]);
   });
 
+  it("drops removed services by key, without scanning every sample", async () => {
+    const statements: string[] = [];
+    const db = new Database(":memory:");
+    const store = sqlStore({
+      dialect: "sqlite",
+      query: (sql, params) => {
+        statements.push(sql);
+        return sqliteQuery(db)(sql, params);
+      },
+    });
+    await store.saveRun({
+      summary: { at: 1, trigger: "manual", full: true, score: 100, label: "operational", failing: {} },
+      results: [{ key: "api", status: "up", checkedAt: 1, probed: true }],
+      samples: [{ key: "api", at: 1, status: "up" }],
+    });
+    statements.length = 0;
+    await store.prune({ before: 0, keepKeys: ["api"] });
+    // Nothing removed: no delete by service at all
+    expect(statements.filter((sql) => sql.includes("service_key"))).toEqual(["SELECT service_key FROM sermon_latest"]);
+    expect(statements.some((sql) => sql.includes("NOT IN"))).toBe(false);
+  });
+
   it("leaves migrations to you when autoMigrate is off", async () => {
     const db = new Database(":memory:");
     const store = sqlStore({ dialect: "sqlite", query: sqliteQuery(db), autoMigrate: false });

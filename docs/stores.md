@@ -106,8 +106,13 @@ interface StatusStore {
 
 - Without `lock`, the library uses an in-process lock: enough for one server, not for several
   instances sharing the store (they could run the checks twice, or let rate limits through).
-- Without `cache`, statistics are recomputed in memory and checks that keep state (such as
-  Pusher's daily peak) lose it on restart.
+- With `cache`, each service keeps a small statistics window there (its last 24 hours of samples
+  and the rest of the week counted per hour), so a run folds in its new samples and reads no
+  history; `samples` is read only to rebuild a window the cache lost. Without `cache`, statistics
+  are recomputed from the whole retention window after every run, and checks that keep state
+  (such as Pusher's daily peak) lose it on restart.
+- `prune` with `keepKeys` runs after every full run: find removed services among the latest
+  results (one per service) and delete their samples by key, rather than scanning every sample.
 
 Check your implementation with the same suite the built-in stores pass:
 

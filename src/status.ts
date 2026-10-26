@@ -1,6 +1,6 @@
 import { resolveTree, type ResolvedNode, type ResolvedService, type ServiceNode } from "./config";
 import { toMs, type Duration } from "./duration";
-import { bucketFor, bucketRuns, computeServiceStats, RANGES } from "./history";
+import { bucketFor, bucketRuns, RANGES, statsFromWindow, updateStatsWindow, type StatsWindow } from "./history";
 import { runServices } from "./runner";
 import { collectSecretValues, redactText } from "./sanitize";
 import { computeScore, resolveScoring, type Scoring, type ScoringInput } from "./score";
@@ -113,6 +113,7 @@ const LABEL_SEVERITY: Record<ScoreLabel, number> = { unknown: 0, operational: 1,
 const TICK_LOCK = "sermon:tick";
 const STATS_KEY = "sermon:stats";
 const LAST_RUN_KEY = "sermon:last-full-run";
+const windowKey = (key: string) => `sermon:stats-window:${key}`;
 
 function sampleOf(result: CheckResult): CheckSample {
   const healthy = result.status === "up" || result.status === "sleeping";
@@ -204,14 +205,32 @@ export function defineStatus(config: StatusConfig): Status {
     return parseJson<Record<string, ServiceStats>>(await cache.get(STATS_KEY)) ?? {};
   }
 
-  /** Recompute the statistics of some services from their samples and cache them all together */
-  async function refreshStats(keys: string[], known?: Record<string, ServiceStats>) {
+  /**
+   * Update the statistics of some services with their new samples and cache them all together.
+   * Each service keeps a window in the store's cache, so this reads no history; the store's
+   * samples are read only to build a window the cache doesn't have.
+   */
+  async function refreshStats(
+    keys: string[],
+    { samples = [], known }: { samples?: CheckSample[]; known?: Record<string, ServiceStats> } = {}
+  ) {
     const at = now();
     const stats = known ?? (await readStats());
     await Promise.all(
       keys.map(async (key) => {
-        const samples = await store.samples(key, { since: at - retentionMs, until: at });
-        stats[key] = computeServiceStats({ samples, now: at });
+        // Windows live only in the store's cache: one per process would miss the other processes' runs
+        const cached = store.cache ? parseJson<StatsWindow>(await store.cache.get(windowKey(key))) : undefined;
+        const known = cached?.version === 1 ? cached : undefined;
+        const window = updateStatsWindow({
+          window: known,
+          samples: known
+            ? samples.filter((sample) => sample.key === key)
+            : await store.samples(key, { since: at - retentionMs, until: at }),
+          now: at,
+          retentionMs,
+        });
+        await store.cache?.set(windowKey(key), JSON.stringify(window), retentionMs);
+        stats[key] = statsFromWindow({ window, now: at });
       })
     );
     // Forget services that no longer exist
@@ -275,7 +294,7 @@ export function defineStatus(config: StatusConfig): Status {
         await store.prune({ before: at - retentionMs, keepKeys: [...services.keys()] });
         await cache.set(LAST_RUN_KEY, JSON.stringify({ at, trigger }), retentionMs);
       }
-      await refreshStats(samples.map((sample) => sample.key));
+      await refreshStats(samples.map((sample) => sample.key), { samples });
 
       return { at, trigger, full, score, label, results };
     },
@@ -314,7 +333,7 @@ export function defineStatus(config: StatusConfig): Status {
       const missing = Object.values(latest)
         .filter((result) => result.status !== "unconfigured" && !cachedStats[result.key])
         .map((result) => result.key);
-      const stats = missing.length ? await refreshStats(missing, cachedStats) : cachedStats;
+      const stats = missing.length ? await refreshStats(missing, { known: cachedStats }) : cachedStats;
 
       const toSnapshot = (node: ResolvedNode): SnapshotNode => {
         if (node.type === "group") {

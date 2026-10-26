@@ -100,10 +100,13 @@ export function mongoStore({ db, collectionPrefix = "sermon_" }: MongoStoreOptio
       await ready();
       await Promise.all([runs.deleteMany({ at: { $lt: before } }), samples.deleteMany({ at: { $lt: before } })]);
       if (keepKeys) {
-        await Promise.all([
-          latest.deleteMany({ _id: { $nin: keepKeys } }),
-          samples.deleteMany({ key: { $nin: keepKeys } }),
-        ]);
+        // Find removed services among the latest results (one per service) and delete their
+        // samples by key, instead of scanning every sample with $nin
+        const stale = await latest.find({ _id: { $nin: keepKeys } }).toArray();
+        const removed = stale.map((doc) => doc._id);
+        if (removed.length) {
+          await Promise.all([latest.deleteMany({ _id: { $in: removed } }), samples.deleteMany({ key: { $in: removed } })]);
+        }
       }
     },
 

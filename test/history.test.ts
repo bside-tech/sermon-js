@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bucketFor, bucketRuns, computeServiceStats } from "../src/history";
+import { bucketFor, bucketRuns, computeServiceStats, statsFromWindow, updateStatsWindow } from "../src/history";
 import type { CheckSample, RunSummary } from "../src/store";
 
 const now = Date.UTC(2026, 9, 9, 12, 2);
@@ -124,5 +124,42 @@ describe("computeServiceStats", () => {
 
   it("handles no data", () => {
     expect(computeServiceStats({ samples: [], now })).toMatchObject({ uptime24h: null, p50: null, latency: [] });
+  });
+});
+
+describe("updateStatsWindow", () => {
+  const HOUR = 3600_000;
+  const sample = (overrides: Partial<CheckSample>): CheckSample => ({ key: "api", at: now, status: "up", ...overrides });
+  // Every 20 minutes over three days, down once an hour
+  const history = Array.from({ length: 3 * 72 }, (_, i) =>
+    sample({ at: now - i * 20 * 60_000, status: i % 3 ? "up" : "down", latencyMs: 100 + i, error: i % 3 ? undefined : `fail ${i}` })
+  ).reverse();
+
+  it("gives the same statistics as the whole history, folded in one run at a time", () => {
+    let window = updateStatsWindow({ samples: [], now: history[0]!.at });
+    for (const item of history) window = updateStatsWindow({ window, samples: [item], now: item.at });
+    expect(statsFromWindow({ window, now })).toEqual(computeServiceStats({ samples: history, now }));
+    // Built at once from the stored history, too
+    expect(statsFromWindow({ window: updateStatsWindow({ samples: history, now }), now })).toEqual(
+      computeServiceStats({ samples: history, now })
+    );
+  });
+
+  it("keeps only the last 24h as samples and counts the rest of the week per hour", () => {
+    const window = updateStatsWindow({ samples: history, now });
+    expect(window.day.every((item) => item.at >= now - 24 * HOUR && item.error === undefined)).toBe(true);
+    expect(window.hours.reduce((sum, [, total]) => sum + total, 0) + window.day.length).toBe(history.length);
+  });
+
+  it("ages out the week to the hour, and failures past the retention", () => {
+    const old = sample({ at: now - 7 * 24 * HOUR - 2 * HOUR, status: "down" });
+    const window = updateStatsWindow({ samples: [old, sample({ at: now })], now });
+    expect(statsFromWindow({ window, now })).toMatchObject({ uptime7d: 100, lastFailure: undefined });
+  });
+
+  it("counts a sample saved again only once", () => {
+    const first = updateStatsWindow({ samples: [sample({ status: "down" })], now });
+    const again = updateStatsWindow({ window: first, samples: [sample({ status: "up" })], now });
+    expect(statsFromWindow({ window: again, now })).toMatchObject({ uptime24h: 100, samples24h: 1 });
   });
 });

@@ -238,6 +238,24 @@ describe("defineStatus", () => {
     expect((await status.run()).results[0]).toMatchObject({ metrics: { peak: 2 } });
   });
 
+  it("updates statistics without reading the history again on every run", async () => {
+    const store = memoryStore();
+    const read = vi.spyOn(store, "samples");
+    const { status, clock, state } = setup({ store });
+    await status.run({ trigger: "scheduled" });
+    read.mockClear();
+    for (let i = 0; i < 5; i++) {
+      clock.advance(5 * MINUTE);
+      state.apiUp = i % 2 === 0;
+      await status.run({ trigger: "scheduled" });
+    }
+    expect(read).not.toHaveBeenCalled();
+
+    const group = (await status.snapshot()).tree[0];
+    if (group?.type !== "group") throw new Error("expected a group");
+    expect(group.children[1]).toMatchObject({ stats: { uptime24h: 66.67, uptime7d: 66.67, samples24h: 6, lastFailure: { status: "down" } } });
+  });
+
   it("works with a store that has neither lock nor cache", async () => {
     const { lock: _lock, cache: _cache, ...bare } = memoryStore();
     const status = defineStatus({ store: bare, services: [custom({ name: "A", check: () => true })] });
