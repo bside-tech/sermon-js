@@ -171,8 +171,14 @@ export function sqlStore({ query, dialect, tablePrefix = "sermon_", autoMigrate 
         await run(`DELETE FROM ${t.samples}`);
         return;
       }
-      await run(`DELETE FROM ${t.latest} WHERE service_key NOT IN (${placeholders(keepKeys.length)})`, keepKeys);
-      await run(`DELETE FROM ${t.samples} WHERE service_key NOT IN (${placeholders(keepKeys.length)})`, keepKeys);
+      // Every service with samples has a latest result: finding removed services there, then
+      // deleting by key, uses the samples' primary key instead of scanning the whole table
+      const rows = await run(`SELECT service_key FROM ${t.latest}`);
+      const keep = new Set(keepKeys);
+      const removed = rows.map((row) => String(row.service_key)).filter((key) => !keep.has(key));
+      if (!removed.length) return;
+      await run(`DELETE FROM ${t.latest} WHERE service_key IN (${placeholders(removed.length)})`, removed);
+      await run(`DELETE FROM ${t.samples} WHERE service_key IN (${placeholders(removed.length)})`, removed);
     },
 
     async lock(name, ttlMs): Promise<LockResult> {

@@ -2,7 +2,8 @@ import { labelForScore, type Scoring } from "./score";
 import type { CheckSample, RunSummary } from "./store";
 import type { HistoryBar, HistoryRange, InstanceStats, ScoreLabel, ServiceStats, Status } from "./types";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 /** How far each range looks back, and its smallest bucket */
 export const RANGES: Record<HistoryRange, { durationMs: number; bucketMs: number }> = {
@@ -27,11 +28,14 @@ function percentile(sorted: number[], p: number): number | null {
   return sorted[Math.max(0, index)] ?? null;
 }
 
+/** A share in percent with two decimals */
+function percent(part: number, total: number): number | null {
+  return total ? Math.round((part / total) * 10000) / 100 : null;
+}
+
 /** Share of samples that were not "down", in percent with two decimals */
 function uptime(samples: Array<{ status: Status }>): number | null {
-  if (!samples.length) return null;
-  const available = samples.filter((sample) => sample.status !== "down").length;
-  return Math.round((available / samples.length) * 10000) / 100;
+  return percent(samples.filter((sample) => sample.status !== "down").length, samples.length);
 }
 
 const measured = (sample: { status: Status; latencyMs?: number }) =>
@@ -94,6 +98,93 @@ export function computeServiceStats({
       : undefined,
     instances,
   };
+}
+
+/**
+ * What a service's statistics need from its history, kept between runs so that a run folds in
+ * its new samples instead of reading the whole retention window again: the last 24h as they
+ * are, and the rest of the week counted per hour.
+ */
+export type StatsWindow = {
+  version: 1;
+  /** Samples of the last 24h, oldest first, without their error */
+  day: CheckSample[];
+  /** Older samples of the week, per hour: [hour start, samples, samples that were not "down"] */
+  hours: Array<[number, number, number]>;
+  /** The most recent failure within the retention */
+  lastFailure?: ServiceStats["lastFailure"];
+};
+
+const isFailure = (sample: CheckSample) => sample.status === "down" || sample.status === "degraded";
+
+/**
+ * Fold samples into a service's window and age out what fell out of it. Starting from no
+ * window with every sample of the retention builds it from scratch. The week's oldest edge is
+ * counted to the hour.
+ */
+export function updateStatsWindow({
+  window,
+  samples,
+  now = Date.now(),
+  retentionMs = 7 * DAY_MS,
+}: {
+  window?: StatsWindow;
+  /** New samples of this service, in any order */
+  samples: CheckSample[];
+  now?: number;
+  /** How long history is kept: nothing older counts */
+  retentionMs?: number;
+}): StatsWindow {
+  // A sample saved again (same time) replaces the one already counted
+  const fresh = new Map(samples.map((sample) => [sample.at, sample]));
+  const merged = [...(window?.day ?? []).filter((sample) => !fresh.has(sample.at)), ...fresh.values()].sort(
+    (a, b) => a.at - b.at
+  );
+
+  let lastFailure = window?.lastFailure;
+  for (const sample of fresh.values()) {
+    if (isFailure(sample) && (!lastFailure || sample.at >= lastFailure.at)) {
+      lastFailure = { at: sample.at, status: sample.status, error: sample.error };
+    }
+  }
+  if (lastFailure && lastFailure.at < now - retentionMs) lastFailure = undefined;
+
+  const weekStart = now - Math.min(7 * DAY_MS, retentionMs);
+  const dayStart = Math.max(now - DAY_MS, weekStart);
+  const hours = new Map((window?.hours ?? []).map(([start, total, available]) => [start, [total, available]]));
+  const day: CheckSample[] = [];
+  for (const { error: _error, ...sample } of merged) {
+    if (sample.at >= dayStart) {
+      day.push(sample);
+      continue;
+    }
+    const start = Math.floor(sample.at / HOUR_MS) * HOUR_MS;
+    const [total = 0, available = 0] = hours.get(start) ?? [];
+    hours.set(start, [total + 1, available + (sample.status === "down" ? 0 : 1)]);
+  }
+
+  return {
+    version: 1,
+    day,
+    // An hour stays while any of it is within the week
+    hours: [...hours]
+      .filter(([start]) => start + HOUR_MS > weekStart)
+      .sort(([a], [b]) => a - b)
+      .map(([start, [total = 0, available = 0]]) => [start, total, available]),
+    lastFailure,
+  };
+}
+
+/** A service's statistics from its window (see `updateStatsWindow`) */
+export function statsFromWindow({ window, now = Date.now() }: { window: StatsWindow; now?: number }): ServiceStats {
+  const stats = computeServiceStats({ samples: window.day, now });
+  let total = window.day.length;
+  let available = window.day.filter((sample) => sample.status !== "down").length;
+  for (const [, count, up] of window.hours) {
+    total += count;
+    available += up;
+  }
+  return { ...stats, uptime7d: percent(available, total), lastFailure: window.lastFailure };
 }
 
 const LABEL_SEVERITY: Record<ScoreLabel, number> = { unknown: 0, operational: 1, degraded: 2, outage: 3 };
