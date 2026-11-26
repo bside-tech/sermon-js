@@ -7,13 +7,14 @@ const KEY_PATTERNS: RegExp[] = [
   /-----BEGIN [A-Z0-9 ]+-----[\s\S]*?(-----END [A-Z0-9 ]+-----|$)/g,
   // JSON Web Tokens (OAuth access and identity tokens)
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(\.[A-Za-z0-9_-]*)?/g,
-  // Prefixed API keys: OpenAI/Anthropic/Stripe (sk-, pk_, rk_), GitHub, Slack, Fly, MailerSend.
+  // Prefixed API keys: OpenAI/Anthropic/Stripe (sk-, pk_, rk_), GitHub, Slack, Fly, MailerSend, Thunderclap.
   // "*" is included because providers echo keys back partly masked (sk-proj-****abcd).
   /\b(sk|pk|rk)[-_][A-Za-z0-9_*.-]{12,}/g,
   /\b(gh[pousr]_|github_pat_)[A-Za-z0-9_*]{12,}/g,
   /\bxox[abeoprs]-[A-Za-z0-9*-]{10,}/g,
   /\b(FlyV1 |fm[12]_|fo1_)[A-Za-z0-9+/=_,*-]{12,}/g,
   /\bmlsn\.[A-Za-z0-9*]{12,}/g,
+  /\btc_org_[A-Za-z0-9_*-]{12,}/g,
   // AWS access key ids, Google API keys, Google OAuth tokens
   /\b(AKIA|ASIA)[0-9A-Z*]{12,}/g,
   /\bAIza[0-9A-Za-z_*-]{20,}/g,

@@ -29,8 +29,8 @@ Redaction happens in one place, before a result is stored or returned, on **all*
 - `user:pass@` in any URL, and every query string
 - `Bearer …`, `Basic …`, `Token …` values
 - anything shaped like a well-known credential, even if it was never declared: PEM blocks,
-  JWTs, `sk-…`, GitHub, Slack, Fly, AWS and Google keys, including the partly masked form
-  providers echo back (`sk-proj-****abcd`)
+  JWTs, `sk-…`, GitHub, Slack, Fly, Thunderclap organisation (`tc_org_…`), AWS and Google
+  keys, including the partly masked form providers echo back (`sk-proj-****abcd`)
 
 Text is redacted first and truncated after, so a secret is never cut in half and left behind.
 

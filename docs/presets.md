@@ -136,6 +136,7 @@ down when it is rejected.
 | `axiom({ dataset, secrets: { token }, edge? })` | Ingests an empty batch | Writes nothing |
 | `upstashRedis({ url, secrets: { token } })` | `PING` over REST | Upstash, Vercel KV and compatible servers |
 | `pusher({ appId, cluster?, secrets: { key, secret }, track?: { connections } })` | Channel list, then each channel's `subscription_count` | See below |
+| `thunderclap({ url?, key?, secrets?: { orgApiKey }, track?: { usage } })` | `/health`, a client connection, and the Usage API's monthly summary, in parallel | See below |
 | `statuspage({ url, name? })` | `/api/v2/status.json` | Any Atlassian Statuspage (Fly.io, Vercel, Cloudflare, GitHub…): none → up, minor → degraded, major/critical → down |
 
 ### Stripe
@@ -162,6 +163,28 @@ estimate run slightly high, which is the safe direction for a quota alert. Set
 today); the daily peak (UTC) is kept in the store's cache. degraded when today's peak reaches
 `warnAbovePct` (90) of the limit, or when subscription counting is off. Message counts aren't
 available from Pusher.
+
+### Thunderclap
+
+Calls the realtime server's `/health` (`url` defaults to `https://realtime.thunderclap.dev`;
+point it at Thunderclap Local if you run it). `/health` isn't documented by Thunderclap, so
+an unexpected answer is degraded, not down. No secret is needed for this part.
+
+With `key` (the app's public key, `pk_…`), it also connects as a client would: it opens a
+WebSocket over the Pusher-compatible protocol, waits for the server to accept it, then closes
+it. down when the key is refused (unknown or disabled app, over the connection limit) or the
+handshake doesn't complete; the refusal's message and code become the error. The connection
+counts toward your connections for that moment. Runtimes without a global `WebSocket` (Node 20)
+skip it, as degraded.
+
+With `secrets.orgApiKey` (an organisation API key, `tc_org_…`, with the `usage:read` scope:
+app secrets don't work), it also reads `/api/v1/usage/summary` for the current UTC month and
+draws two `usage` bars against the plan: peak connections and messages, reset at the end of
+the month. The peak is used rather than the billed p95 because it is what the free plan caps;
+the p95 is reported as `metrics.connectionsP95`, the plan as `metrics.plan`. degraded at
+`track.usage.warnAbovePct` (90). Custom plans have no included amounts, so the counts become
+metrics. `track: { usage: false }` skips the Usage API. Usage is rolled up every 10 minutes,
+and the API allows 60 requests a minute per key.
 
 ## Databases
 

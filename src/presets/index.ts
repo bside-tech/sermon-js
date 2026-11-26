@@ -48,6 +48,7 @@ export {
   statuspage,
   stripe,
   tavily,
+  thunderclap,
   upstashRedis,
   vercel,
 } from "./providers";
@@ -74,6 +75,7 @@ export type {
   StatuspageOptions,
   StripeOptions,
   TavilyOptions,
+  ThunderclapOptions,
   UpstashRedisOptions,
   VercelAiGatewayOptions,
   VercelBlobOptions,

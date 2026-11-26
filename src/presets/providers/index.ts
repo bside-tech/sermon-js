@@ -23,6 +23,9 @@ export type {
 export { pusher, signPusherRequest } from "./pusher";
 export type { PusherOptions } from "./pusher";
 
+export { thunderclap } from "./thunderclap";
+export type { ThunderclapOptions } from "./thunderclap";
+
 export { vercel } from "./vercel";
 export type { VercelAiGatewayOptions, VercelBlobOptions } from "./vercel";
 

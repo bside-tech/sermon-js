@@ -69,6 +69,8 @@ describe("secrets never reach public results", () => {
       "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
       "github_pat_11ABCDEFG0abcdefghijkl_mnopqrstuvwxyz",
       "xoxb-123456789012-abcdefghijkl",
+      "tc_org_9f2Kq7LmP0xR4sT8vW1y",
+      "tc_org_************4sT8",
       "AKIAIOSFODNN7EXAMPLE",
       "AIzaSyA-abcdefghijklmnopqrstuvwxyz012345",
       "ya29.a0AfH6SMBabcdefghijklmnop",
